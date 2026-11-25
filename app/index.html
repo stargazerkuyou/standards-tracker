@@ -152,7 +152,7 @@ const DEFAULT_DAV_FILE = 'https://dav.jianguoyun.com/dav/我的坚果云/准则�
 const FW = {'中国准则':'--cn','IFRS':'--ifrs','可持续':'--esg','监管':'--aud','审计监管':'--aud'};
 const FW_LIST = ['全部','中国准则','IFRS','可持续','监管'];
 const TYPE_LIST = ['全部','准则发布','解释','征求意见','解读指引','会议决定','动态'];
-const SRC_NAME = {mof:'财政部会计司', ifrs:'IFRS 基金会', csrc:'证监会'};
+const SRC_NAME = {mof:'财政部会计司', ifrs:'IFRS 基金会', csrc:'证监会', szse:'深交所'};
 
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
@@ -481,7 +481,7 @@ function openDetail(id){
       <div class="btn-row"><button class="btn" data-ext="${esc(it.url)}">查看原文</button>
         <button class="btn ghost" data-unreadit="${id}">标为未读</button></div>
       ${it.ai ? `<div class="ai-note">摘要由 AI（${esc(ai.model || '')}）根据原文生成，可能有误，请以原文为准。</div>`
-        : it.auto ? `<div class="ai-note">${it.source === 'ifrs' ? '中文标题和摘要为机器翻译' : '摘要取自原文开头'}，日期为程序自动识别，请以原文为准。</div>` : ''}
+        : it.auto ? `<div class="ai-note">${it.source === 'ifrs' ? '中文标题和摘要为机器翻译' : it.auto.from_attachment ? '摘要取自原文开头，要点取自附件' : '摘要取自原文开头'}，日期为程序自动识别，请以原文为准。</div>` : ''}
     </div>`;
   $('#sheet').classList.add('open');
   $('#sheet .body').scrollTop = 0;

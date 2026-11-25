@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from common import now_iso  # noqa: E402
-from sources import mof, ifrs, csrc  # noqa: E402
+from sources import mof, ifrs, csrc, szse  # noqa: E402
 import summarize  # noqa: E402
 import auto  # noqa: E402
 import relevance  # noqa: E402
@@ -29,7 +29,8 @@ META = ROOT / "data" / "meta.json"
 MAX_ITEMS = 3000
 MAX_AI = int(os.environ.get("MAX_AI", "80"))
 
-SOURCE_NAMES = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB / 解释委员会 / ISSB）", "csrc": "证监会（会计监管）"}
+SOURCE_NAMES = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB / 解释委员会 / ISSB）", "csrc": "证监会（会计监管）",
+                "szse": "深交所《会计监管动态》"}
 
 
 def load():
@@ -82,13 +83,13 @@ def main():
         try:
             old = it.get("auto") or {}
             att_text, att_name = "", None
-            if it["source"] in ("mof", "csrc") and it.get("attachments"):
+            if it["source"] in ("mof", "csrc", "szse") and it.get("attachments"):
                 att_text, att_name = attach.read(it["attachments"])
             # 正文太短（多半只有一段“现印发给你们”），就把附件内容也拿来生成摘要
             body = text if len(text or "") >= 400 or not att_text else (text or "") + "\n" + att_text
             new = auto.build(it, body, keep_title=old.get("title_zh"))
             if att_text:
-                new["changes"] = attach.headings(att_text)
+                new["changes"] = (szse.case_headings(att_text) if it["source"] == "szse" else []) or attach.headings(att_text)
                 new["from_attachment"] = att_name
                 if not new.get("comment_deadline") and not new.get("effective_date"):
                     d = auto.extract_dates(att_text)
@@ -163,6 +164,30 @@ def main():
     status["csrc"] = {"name": SOURCE_NAMES["csrc"], "added": added, "errors": errs[:10], "stats": stats,
                       "ok": bool(stats), "checked_at": now_iso()}   # 至少一个栏目读成功就算正常
 
+    # ---------- 深交所 ----------
+    errs, added = [], 0
+    try:
+        listed, errs = szse.fetch_list()
+        for it in listed:
+            if it["id"] in items or it["id"] in skipped:
+                continue
+            try:
+                text, att = szse.fetch_detail(it)
+                it["attachments"] = att
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"详情 {it['url']}: {e}")
+                text = ""
+            texts[it["id"]] = text
+            items[it["id"]] = it
+            added += 1
+            do_auto(it, text)
+            try_ai(it, text)
+        status["szse"] = {"name": SOURCE_NAMES["szse"], "added": added, "errors": errs[:10],
+                          "ok": bool(listed) or not errs, "checked_at": now_iso()}
+    except Exception as e:  # noqa: BLE001
+        status["szse"] = {"name": SOURCE_NAMES["szse"], "added": 0, "errors": [str(e)[:300]],
+                          "ok": False, "checked_at": now_iso()}
+
     # ---------- IFRS ----------
     errs, added = [], 0
     try:
@@ -210,8 +235,8 @@ def main():
     need.sort(key=lambda x: x.get("date") or "", reverse=True)
     for it in need[:150]:
         try:
-            if it["source"] in ("mof", "csrc"):
-                text, att = (mof if it["source"] == "mof" else csrc).fetch_detail(it)
+            if it["source"] in ("mof", "csrc", "szse"):
+                text, att = {"mof": mof, "csrc": csrc, "szse": szse}[it["source"]].fetch_detail(it)
                 it.setdefault("attachments", att)
             else:
                 text = ifrs.parse_article(ifrs.get(it["url"]), it["url"])["text"]
@@ -227,8 +252,8 @@ def main():
         if ai_budget[0] <= 0 or not summarize.backend():
             break
         try:
-            if it["source"] in ("mof", "csrc"):
-                text, _ = (mof if it["source"] == "mof" else csrc).fetch_detail(it)
+            if it["source"] in ("mof", "csrc", "szse"):
+                text, _ = {"mof": mof, "csrc": csrc, "szse": szse}[it["source"]].fetch_detail(it)
             else:
                 text = ifrs.parse_article(ifrs.get(it["url"]), it["url"])["text"]
         except Exception:  # noqa: BLE001

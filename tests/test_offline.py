@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scraper"))
 
 import common  # noqa: E402
-from sources import mof, ifrs, csrc  # noqa: E402
+from sources import mof, ifrs, csrc, szse  # noqa: E402
 import summarize  # noqa: E402
 import fetch  # noqa: E402
 import auto  # noqa: E402
@@ -126,6 +126,30 @@ def test_csrc_column():
     check(len(rows) == 2 and rows[0][2] == "2026-08-15" and rows[0][1].startswith("https://www.csrc.gov.cn/csrc/c100029/"), f"证监会栏目网页解析：{rows[:1]}")
 
 
+def test_szse():
+    print("深交所")
+    html = """<ul><li><a href="./202608/t20260826_5601.html">《深圳证券交易所会计监管动态》（2026年第2期）</a><span>2026-08-26</span></li>
+    <li><a href="./202604/t20260409_5581.html">《深圳证券交易所会计监管动态》（2026年第1期）</a><span>2026-04-09</span></li>
+    <li><a href="/other/x.html">无关链接</a></li></ul>"""
+    items = szse.parse_list(html, "https://smehome.szse.cn/trends/accounting_supervise/index.html")
+    check(len(items) == 2 and items[0]["date"] == "2026-08-26" and items[0]["url"].endswith("/202608/t20260826_5601.html"), f"深交所列表：{[(i['title'], i['date']) for i in items]}")
+    check(items[0]["framework"] == "监管" and items[0]["source"] == "szse", "分类=监管")
+    t = """目录
+一、深市会计审计监管通讯 3
+三、典型会计案例研究 12
+四、会计审计政策资讯 22
+一、深市会计审计监管通讯
+（一）审计评估机构纪律处分情况
+三、典型会计案例研究
+（一）外购在研项目资本化的判断
+案例背景：A公司……
+（二）员工持股计划参与定向增发是否构成股份支付
+四、会计审计政策资讯
+（一）财政部发布修订后财务报表列报准则"""
+    hs = szse.case_headings(t)
+    check(hs == ["（一）外购在研项目资本化的判断", "（二）员工持股计划参与定向增发是否构成股份支付"], f"案例标题：{hs}")
+
+
 def test_auto():
     print("自动中文信息")
     d = auto.extract_dates("请组织征求意见，并于2026年10月11日前将意见反馈至财政部会计司。本解释自2027年1月1日起施行。")
@@ -143,6 +167,7 @@ def test_main():
     fake = fake_get_factory()
     common.get = mof.get = ifrs.get = fake
     csrc.fetch_list = lambda: ([], [], ["测试: 列表 0 条，相关 0 条"])
+    szse.fetch_list = lambda: ([], [])
     import attach
     attach.read = lambda atts: ("企业会计准则解释第22号\n一、关于售后租回交易的列报\n二、关于数据资源的收入确认", "1.解释.pdf")
     calls = []
@@ -189,6 +214,7 @@ if __name__ == "__main__":
     test_parsers()
     test_csrc()
     test_csrc_column()
+    test_szse()
     test_auto()
     test_main()
     print("\n全部通过" if not check.failed else "\n有失败项")
