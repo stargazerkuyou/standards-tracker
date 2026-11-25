@@ -67,7 +67,7 @@ PAGE_HEADER = re.compile(r"会计监管动态\s*20\d{2}\s*年")
 CASE_HEAD = re.compile(r"^\s*(?:\([一二三四五六七八九十]{1,3}\)|案例[一二三四五六七八九十\d]{1,3}\s*[:：、]?|问题\s*\d+\s*[【\[]?)(.{4,70})$")
 
 
-def case_headings(text, limit=10):
+def case_headings(text, limit=12):
     """附件里「典型会计案例研究」部分的小标题，例如“(一)研发支出及无形资产相关问题”“案例一:关于外购在研专利技术的会计处理”。"""
     lines = [l.strip() for l in (text or "").splitlines()]
     starts = [i for i, l in enumerate(lines) if CASE_SECTION.match(l)]
@@ -83,13 +83,19 @@ def case_headings(text, limit=10):
         m = CASE_HEAD.match(line)
         if not m:
             continue
+        is_case = line.startswith(("案例", "问题"))
         h = re.sub(r"\s+", "", line)
+        # “(一)”开头的只要分组标题（如“(一)收入相关问题”），不要案例里引用的准则条文
+        if not is_case and not re.search(r"问题$", h):
+            continue
         # 标题被换行截断：下一行很短且不是新标题，就接上
         if not re.search(r"(问题|处理|判断|影响|确认|计量|列报|披露|识别|分类|核算)$", h) and i + 1 < len(lines):
             nxt = re.sub(r"\s+", "", lines[i + 1])
             if nxt and len(nxt) < 30 and not CASE_HEAD.match(lines[i + 1]) and not PAGE_HEADER.search(nxt):
                 h += nxt
-        h = re.sub(r"[.．…·]{3,}.*$", "", h).rstrip("。；;，,")
+        h = re.sub(r"[.．…·]{3,}.*$", "", h)
+        h = re.sub(r"—\d+—", "", h)
+        h = re.sub(r"\d\.案例及相关问题$", "", h).rstrip("。；;，,")
         if len(h) >= 6 and h not in out:
             out.append(h[:70])
         if len(out) >= limit:
