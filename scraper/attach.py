@@ -74,27 +74,40 @@ def clean(text):
     return text.strip()
 
 
-HEAD_RE = re.compile(r"^\s*(?:[一二三四五六七八九十]{1,3}、|第[一二三四五六七八九十]{1,3}[章条节部分]\s*|\d{1,2}-\d{1,2}\s+)(.{3,60})$")
+HEAD_RE = re.compile(r"^\s*(?:([一二三四五六七八九十]{1,3})、|第[一二三四五六七八九十]{1,3}[章条节部分]\s*|(\d{1,2})\s*[-－]\s*(\d{1,2})\s*(?=[\u4e00-\u9fff]))(.{3,60})$")
+BODY_START = re.compile(r"(该问题|本解释|本指引|根据|按照|依据|企业应|对于|在实务中|实务中|《企业会计准则|\(以下|（以下)")
+OPEN_END = re.compile(r"[的与和及、对就在于（(《“]$")
 
 
 def headings(text, limit=8):
-    """附件里的一级标题，作为“要点”。例如“一、关于……的会计处理”。"""
+    """附件里的一级标题，作为“要点”。例如“一、关于……的会计处理”、“5-1 ……”。"""
     out = []
+    seen_one = False
     lines = (text or "").splitlines()
     for i, line in enumerate(lines):
         line = line.strip()
         m = HEAD_RE.match(line)
         if not m:
             continue
+        if m.group(1) == "一":
+            if seen_one:                       # 编号重新从“一、”开始：已经进入下一级内容，停
+                break
+            seen_one = True
         h = line
-        # 标题被 PDF 拆成两行的，接上下一行
-        if not re.search(r"[。？?：:）)]$", h) and len(h) < 30 and i + 1 < len(lines):
+        # 标题被 PDF 拆成两行：只有上一行明显没说完（以“的、与、和……”结尾）才接下一行
+        if OPEN_END.search(h) and i + 1 < len(lines):
             nxt = lines[i + 1].strip()
-            if nxt and len(nxt) < 30 and not HEAD_RE.match(nxt) and not re.match(r"^[（(]", nxt):
+            if nxt and len(nxt) < 40 and not HEAD_RE.match(nxt):
                 h += nxt
         h = re.sub(r"\s+", "", h)
-        if h not in out and not re.search(r"附件|联系人|电话", h):
-            out.append(h[:70])
+        cut = BODY_START.search(h, 6)          # 标题后面粘上了正文，截掉
+        if cut:
+            h = h[:cut.start()]
+        h = h.rstrip("，,。；;：:")
+        if len(h) < 5 or re.search(r"附件|联系人|电话|\d{4,}", h):
+            continue
+        if h not in out:
+            out.append(h[:60])
         if len(out) >= limit:
             break
     return out
