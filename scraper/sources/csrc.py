@@ -29,12 +29,12 @@ def channel_id(ref):
     if not ref.startswith("http"):
         return ref
     html = get(ref, timeout=60)
-    m = re.search(r'channel[_-]?id[^0-9a-f<>]{0,40}([0-9a-f]{32})', html, re.I) \
-        or re.search(r'([0-9a-f]{32})[^<>]{0,40}channel[_-]?id', html, re.I) \
+    m = re.search(r'channel[_-]?id["\'\s]*(?:content)?\s*[=:]\s*["\']?([0-9a-f]{32})', html, re.I) \
+        or re.search(r'content=["\']([0-9a-f]{32})["\'][^>]*channel[_-]?id', html, re.I) \
         or re.search(r'searchList/([0-9a-f]{32})', html)
     if not m:
-        hint = re.findall(r'<meta[^>]{0,120}>', html)[:6]
-        raise RuntimeError("栏目页里找不到频道编号；页面 meta：" + " | ".join(hint)[:300])
+        ctx = [html[max(0, x.start() - 60):x.end() + 20] for x in re.finditer(r"[0-9a-f]{32}", html)][:3]
+        raise RuntimeError("栏目页里找不到频道编号；32位编号附近：" + " || ".join(ctx)[:400])
     return m.group(1)
 
 

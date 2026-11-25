@@ -131,7 +131,7 @@ def mof_summary(text):
         picked.append(l)
         if sum(len(x) for x in picked) > 120:
             break
-    s = "".join(picked)
+    s = "".join(picked).lstrip("，。、；：,.;: ")
     return (s[:220] + "……") if len(s) > 220 else (s or None)
 
 
