@@ -14,6 +14,9 @@ import common  # noqa: E402
 from sources import mof, ifrs  # noqa: E402
 import summarize  # noqa: E402
 import fetch  # noqa: E402
+import auto  # noqa: E402
+auto.ENGINES[:] = [("假翻译", lambda t: "【译】国际会计准则委员会发布暴露草案：" + t[:20])]
+auto.time.sleep = lambda s: None
 
 MOF_LIST = """<html><body><div class="nav"><a href="/">首页</a><span>2017年11月21日</span></div>
 <ul class="liBox">
@@ -92,6 +95,18 @@ def test_parsers():
     check(ai["type"] is None and ai["importance"] == "中" and ai["changes"] == ["a"], "AI 输出清洗")
 
 
+def test_auto():
+    print("自动中文信息")
+    d = auto.extract_dates("请组织征求意见，并于2026年10月11日前将意见反馈至财政部会计司。本解释自2027年1月1日起施行。")
+    check(d == {"comment_deadline": "2026-10-11", "effective_date": "2027-01-01"}, f"中文日期：{d}")
+    d = auto.extract_dates("The amendments are effective for annual reporting periods beginning on or after 1 January 2027. Comments are requested by 30 March 2027.")
+    check(d["comment_deadline"] == "2027-03-30" and d["effective_date"].startswith("2027-01-01"), f"英文日期：{d}")
+    sm = auto.mof_summary("各省、自治区、直辖市财政厅（局）：\n为进一步规范有关业务的会计处理，我们起草了《企业会计准则解释第22号(征求意见稿)》。\n联系人：张三")
+    check(sm.startswith("为进一步规范") and "联系人" not in sm, f"财政部摘要：{sm}")
+    zh = auto.translate("IASB issues exposure draft")
+    check("国际会计准则理事会" in zh and "征求意见稿" in zh, f"术语纠正：{zh}")
+
+
 def test_main():
     print("主流程")
     fake = fake_get_factory()
@@ -118,6 +133,10 @@ def test_main():
         check(all(it["ai"] for it in db["items"]), "摘要已写入")
         check("CAS 21" in db["items"][0]["standards"], "AI 给出的准则编号并入 standards")
         check(db["sources"]["mof"]["ok"] and db["sources"]["ifrs"]["ok"], "来源状态正常")
+        ifrs_it = [x for x in db["items"] if x["source"] == "ifrs"][0]
+        check(ifrs_it["auto"]["title_zh"].startswith("【译】"), "IFRS 有中文标题")
+        mof_it = [x for x in db["items"] if "征求" in x["title"]][0]
+        check(mof_it["auto"]["comment_deadline"] == "2026-10-11", f"财政部截止日：{mof_it['auto']}")
         meta = json.loads(fetch.META.read_text("utf-8"))
         check(meta["count"] == 6 and len(meta["version"]) == 12, "meta.json")
         calls.clear()
@@ -132,6 +151,7 @@ def test_main():
 
 if __name__ == "__main__":
     test_parsers()
+    test_auto()
     test_main()
     print("\n全部通过" if not check.failed else "\n有失败项")
     sys.exit(1 if check.failed else 0)

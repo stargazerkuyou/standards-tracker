@@ -194,7 +194,13 @@ function relTime(isoTs){
 }
 const items = () => (data && data.items) || [];
 const byId = id => items().find(x => x.id === id);
-const titleOf = it => (it.ai && it.ai.title_zh) || it.title;
+// 合并 AI 摘要（有的话优先）和自动提取的信息（规则 + 机器翻译）
+function info(it){
+  const o = Object.assign({}, it.auto || {});
+  for(const [k, v] of Object.entries(it.ai || {})) if(v != null && !(Array.isArray(v) && !v.length)) o[k] = v;
+  return o;
+}
+const titleOf = it => info(it).title_zh || it.title;
 const isRead = it => !!st.read[it.id];
 const isNew = it => !isRead(it) && st.baseline && it.fetched_at > st.baseline;
 const isStar = it => !!(st.star[it.id] && st.star[it.id].on);
@@ -263,7 +269,7 @@ async function syncNow(manual){
 /* ================= 筛选 ================= */
 function matchQ(it, q){
   if(!q) return true;
-  const hay = [it.title, it.title_en, it.ai && it.ai.title_zh, it.ai && it.ai.summary, (it.standards||[]).join(' '),
+  const hay = [it.title, it.title_en, info(it).title_zh, info(it).summary, (it.standards||[]).join(' '),
     it.ai && (it.ai.standards||[]).map(s => (s.cas||'') + ' ' + (s.ifrs||'')).join(' '), noteOf(it)].join(' ').toLowerCase();
   return q.toLowerCase().split(/\s+/).every(w => hay.includes(w) || hay.replace(/\s/g,'').includes(w.replace(/\s/g,'')));
 }
@@ -318,7 +324,7 @@ function renderFilters(){
 }
 
 function card(it){
-  const ai = it.ai || {};
+  const ai = info(it);
   const due = [];
   const ddl = isoFrom(ai.comment_deadline), eff = isoFrom(ai.effective_date);
   if(ddl && daysLeft(ddl) >= 0) due.push(`<span class="tag due">意见截止 ${ddl.slice(5)}（${daysLeft(ddl)}天）</span>`);
@@ -362,7 +368,7 @@ function banners(){
 function renderCal(){
   const rows = [];
   for(const it of items()){
-    const ai = it.ai || {};
+    const ai = info(it);
     const eff = isoFrom(ai.effective_date), ddl = isoFrom(ai.comment_deadline);
     if(eff) rows.push({d:eff, kind:'eff', it});
     if(ddl) rows.push({d:ddl, kind:'ddl', it});
@@ -373,7 +379,7 @@ function renderCal(){
       <div><div class="cal-date">${r.d}</div><div class="left">${daysLeft(r.d) >= 0 ? (daysLeft(r.d) === 0 ? '今天' : '还有 ' + daysLeft(r.d) + ' 天') : Math.abs(daysLeft(r.d)) + ' 天前'}</div></div>
       <div style="flex:1;min-width:0"><span class="cal-kind ${r.kind}">${r.kind === 'eff' ? '生效' : '意见截止'}</span>
         <div class="ttl" style="font-size:14.5px">${esc(titleOf(r.it))}</div>
-        <div class="meta"><span class="fw">${esc(r.it.framework)}</span>·<span>${esc(r.kind === 'eff' ? r.it.ai.effective_date : r.it.ai.comment_deadline)}</span></div></div></div></div>`;
+        <div class="meta"><span class="fw">${esc(r.it.framework)}</span>·<span>${esc(r.kind === 'eff' ? info(r.it).effective_date : info(r.it).comment_deadline)}</span></div></div></div></div>`;
   if(!up.length && !past.length) return `<div class="empty">暂时没有识别到生效日期或征求意见截止日期<br>（来自 AI 摘要；摘要生成后会出现在这里）</div>`;
   return (up.length ? `<div class="group-h">即将到来</div>` + up.map(row).join('') : '<div class="empty">近期没有即将到来的日期</div>') +
     (past.length ? `<div class="group-h">最近已过（120 天内）</div>` + past.map(row).join('') : '');
@@ -390,11 +396,13 @@ function renderSettings(){
     `<div class="src"><span class="s" style="background:${s.ok ? '#22c55e' : '#ef4444'}"></span><span class="t">${esc(s.name || k)}</span>
       <span class="w">${s.ok ? '正常' : '失败'} · 上次成功 ${s.last_success ? relTime(s.last_success) : '无'}</span></div>
       ${!s.ok && s.errors && s.errors.length ? `<div class="hint" style="word-break:break-all">${esc(s.errors[0].split('\n')[0])}</div>` : ''}`).join('') : '<div class="hint">尚未加载数据</div>';
-  const n = items().length, withAi = items().filter(x => x.ai).length;
+  const n = items().length, withAi = items().filter(x => x.ai).length, withZh = items().filter(x => x.source !== 'ifrs' || info(x).title_zh).length;
+  const tr = data && data.auto_status;
   return `<div class="sec"><h3>数据来源</h3>${srcs}
       ${data && data.ai_status && data.ai_status.errors && data.ai_status.errors.length && !withAi ? `<div class="hint" style="color:#a8071a;word-break:break-all">AI 摘要出错：${esc(data.ai_status.errors[0])}</div>` : ''}
       ${data && data.ai_status && data.ai_status.note && data.ai_status.note.length ? `<div class="hint">${esc(data.ai_status.note[0])}，剩下的下次自动补</div>` : ''}
-      <div class="hint">共 ${n} 条，其中 ${withAi} 条已有 AI 摘要；数据更新于 ${data && data.updated_at ? new Date(data.updated_at).toLocaleString('zh-CN') : '—'}</div></div>
+      ${tr && tr.fail && !tr.ok ? `<div class="hint" style="color:#a8071a;word-break:break-all">机器翻译暂时不可用：${esc(tr.last_error || '')}</div>` : ''}
+      <div class="hint">共 ${n} 条，${withZh} 条有中文标题${withAi ? '，' + withAi + ' 条有 AI 摘要' : ''}；数据更新于 ${data && data.updated_at ? new Date(data.updated_at).toLocaleString('zh-CN') : '—'}</div></div>
     <div class="sec form"><h3>显示</h3>
       <label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input type="checkbox" id="hideLow" style="width:auto" ${cfg.hideLow?'checked':''}> 隐藏低重要度动态（人事、会议活动、播客等）</label>
       <div class="btn-row"><button class="btn ghost" id="markAll">全部标为已读</button></div></div>
@@ -416,7 +424,7 @@ function openDetail(id){
   const it = byId(id); if(!it) return;
   ui.openId = id;
   if(!st.read[id]){ st.read[id] = new Date().toISOString(); saveState(); }
-  const ai = it.ai || {};
+  const ai = info(it);
   const kv = [];
   if(ai.effective_date) kv.push(['生效日期', esc(ai.effective_date)]);
   if(ai.comment_deadline) kv.push(['意见截止', esc(ai.comment_deadline) + (isoFrom(ai.comment_deadline) && daysLeft(isoFrom(ai.comment_deadline)) >= 0 ? `（还有 ${daysLeft(isoFrom(ai.comment_deadline))} 天）` : '')]);
@@ -433,7 +441,7 @@ function openDetail(id){
       <div class="d-title">${esc(titleOf(it))}</div>
       ${it.title_en && ai.title_zh ? `<div class="d-en">${esc(it.title_en)}</div>` : ''}
       ${ai.summary ? `<div class="sec"><h3>摘要</h3><p>${esc(ai.summary)}</p>${ai.importance_reason ? `<div class="hint">重要度理由：${esc(ai.importance_reason)}</div>` : ''}</div>`
-        : `<div class="sec"><h3>摘要</h3><p class="hint">AI 摘要还没生成，下次自动抓取时会补上。可以先看原文。</p></div>`}
+        : `<div class="sec"><h3>摘要</h3><p class="hint">暂无摘要，可以先看原文。</p></div>`}
       ${ai.changes && ai.changes.length ? `<div class="sec"><h3>要点</h3><ul>${ai.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
       <div class="sec"><dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>
       ${map.length ? `<div class="sec"><h3>中外准则对照</h3><table class="map"><tr><th>中国企业会计准则</th><th>IFRS / IAS</th></tr>
@@ -444,7 +452,8 @@ function openDetail(id){
         <div class="hint" id="noteHint">自动保存${cfg.davUser ? '，并同步到坚果云' : ''}</div></div>
       <div class="btn-row"><button class="btn" data-ext="${esc(it.url)}">查看原文</button>
         <button class="btn ghost" data-unreadit="${id}">标为未读</button></div>
-      ${it.ai ? `<div class="ai-note">摘要由 AI（${esc(ai.model || '')}）根据原文生成，可能有误，请以原文为准。</div>` : ''}
+      ${it.ai ? `<div class="ai-note">摘要由 AI（${esc(ai.model || '')}）根据原文生成，可能有误，请以原文为准。</div>`
+        : it.auto ? `<div class="ai-note">${it.source === 'ifrs' ? '中文标题和摘要为机器翻译' : '摘要取自原文开头'}，日期为程序自动识别，请以原文为准。</div>` : ''}
     </div>`;
   $('#sheet').classList.add('open');
   $('#sheet .body').scrollTop = 0;

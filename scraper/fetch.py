@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import now_iso  # noqa: E402
 from sources import mof, ifrs  # noqa: E402
 import summarize  # noqa: E402
+import auto  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "data.json"
@@ -58,6 +59,12 @@ def main():
     ai_errors = []
     ai_note = []
 
+    def do_auto(it, text):
+        try:
+            it["auto"] = auto.build(it, text)
+        except Exception as e:  # noqa: BLE001
+            print("  自动摘要失败", it["url"], e)
+
     def try_ai(it, text):
         if ai_budget[0] <= 0 or not summarize.backend():
             return
@@ -92,6 +99,7 @@ def main():
                 texts[it["id"]] = ""
             items[it["id"]] = it
             added += 1
+            do_auto(it, texts[it["id"]])
             try_ai(it, texts[it["id"]])
     except Exception as e:  # noqa: BLE001
         errs.append(f"{e}\n{traceback.format_exc(limit=2)}")
@@ -106,6 +114,7 @@ def main():
             items[it["id"]] = it
             texts[it["id"]] = text
             added += 1
+            do_auto(it, text)
             try_ai(it, text)
     except Exception as e:  # noqa: BLE001
         errs.append(f"{e}\n{traceback.format_exc(limit=2)}")
@@ -124,15 +133,32 @@ def main():
             if not art.get("date_guess"):
                 it.pop("date_guess", None)
                 fixed += 1
+            texts[it["id"]] = art["text"]
+            do_auto(it, art["text"])
             if not it.get("ai"):
-                texts[it["id"]] = art["text"]
                 try_ai(it, art["text"])
         except Exception as e:  # noqa: BLE001
             print("  日期修正失败", it["url"], e)
     if fixed:
         print(f"修正了 {fixed} 条 IFRS 日期")
 
-    # ---------- 补做以前没做成的摘要 ----------
+    # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
+    need = [x for x in items.values() if x["id"] not in texts and (
+        "auto" not in x or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh")))]
+    need.sort(key=lambda x: x.get("date") or "", reverse=True)
+    for it in need[:150]:
+        try:
+            if it["source"] == "mof":
+                text, att = mof.fetch_detail(it)
+                it.setdefault("attachments", att)
+            else:
+                text = ifrs.parse_article(ifrs.get(it["url"]), it["url"])["text"]
+            texts[it["id"]] = text
+            do_auto(it, text)
+        except Exception as e:  # noqa: BLE001
+            print("  补做失败", it["url"], e)
+
+    # ---------- 补做以前没做成的 AI 摘要 ----------
     pending = [it for it in items.values() if not it.get("ai") and it["id"] not in texts]
     pending.sort(key=lambda x: x.get("date") or "", reverse=True)
     for it in pending:
@@ -152,6 +178,7 @@ def main():
         prev = db["sources"].get(k, {})
         v["last_success"] = v["checked_at"] if v["ok"] else prev.get("last_success")
     db["sources"].update(status)
+    db["auto_status"] = dict(auto.status, checked_at=now_iso())
     db["ai_status"] = {"backend": summarize.backend(), "checked_at": now_iso(),
                        "made": MAX_AI - ai_budget[0] if not ai_note and ai_budget[0] > 0 else None,
                        "note": ai_note[:1], "errors": ai_errors[:3]}
