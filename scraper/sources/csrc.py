@@ -28,11 +28,13 @@ ATTACH_RE = re.compile(r"\.(pdf|docx?|xlsx?|wps|zip|rar)$", re.I)
 def channel_id(ref):
     if not ref.startswith("http"):
         return ref
-    html = get(ref)
-    m = re.search(r'name=["\']?(?:meta-)?channelid["\']?\s+content=["\']([0-9a-f]{32})', html, re.I) \
-        or re.search(r'channelid["\']?\s*[:=]\s*["\']([0-9a-f]{32})', html, re.I)
+    html = get(ref, timeout=60)
+    m = re.search(r'channel[_-]?id[^0-9a-f<>]{0,40}([0-9a-f]{32})', html, re.I) \
+        or re.search(r'([0-9a-f]{32})[^<>]{0,40}channel[_-]?id', html, re.I) \
+        or re.search(r'searchList/([0-9a-f]{32})', html)
     if not m:
-        raise RuntimeError("栏目页里找不到 channelid")
+        hint = re.findall(r'<meta[^>]{0,120}>', html)[:6]
+        raise RuntimeError("栏目页里找不到频道编号；页面 meta：" + " | ".join(hint)[:300])
     return m.group(1)
 
 
@@ -72,12 +74,24 @@ def _date_of(rec):
 
 
 def search_list(cid, page_size=20):
-    url = f"{BASE}/searchList/{cid}"
-    r = session.get(url, headers=HEAD, timeout=30, params={
-        "_isAgg": "true", "_isJson": "true", "_pageSize": page_size, "_template": "index",
-        "_rangeTimeGte": "", "_channelName": "", "page": 1})
-    r.raise_for_status()
-    rows = _find_results(r.json()) or []
+    params = {"_isAgg": "true", "_isJson": "true", "_pageSize": page_size, "_template": "index",
+              "_rangeTimeGte": "", "_channelName": "", "page": 1}
+    last = None
+    for base in (BASE, "http://www.csrc.gov.cn"):          # https 不通就试 http
+        for _ in range(2):
+            try:
+                r = session.get(f"{base}/searchList/{cid}", headers=HEAD, timeout=(20, 90), params=params)
+                r.raise_for_status()
+                data = r.json()
+                break
+            except Exception as e:  # noqa: BLE001
+                last = e
+                data = None
+        if data is not None:
+            break
+    if data is None:
+        raise last
+    rows = _find_results(data) or []
     out = []
     for rec in rows:
         title = re.sub(r"<[^>]+>", "", str(rec.get("title") or "")).strip()
