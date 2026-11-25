@@ -26,8 +26,7 @@ GitHub Actions（每天北京时间 7:17）
 
 1. **建仓库**：在 GitHub 新建**公开**仓库 `standards-tracker`，把本文件夹全部推上去（包括 `.github` 文件夹）。
    仓库名如果不一样，要改 `app/index.html` 里的 `DEFAULT_DATA_BASE`，或在 App“设置 → 数据地址”里改。
-2. **填密钥**：仓库 Settings → Secrets and variables → Actions → New repository secret，添加三个：
-   - `ANTHROPIC_API_KEY`：Claude API 密钥（console.anthropic.com 申请）
+2. **填密钥**：仓库 Settings → Secrets and variables → Actions → New repository secret，添加两个：
    - `ANDROID_KEYSTORE_B64`：签名钥匙，见单独发给你的 `签名钥匙-勿上传.txt`
    - `ANDROID_KEYSTORE_PASSWORD`：签名密码，同上
 3. **第一次抓取**：Actions → “抓取准则动态” → Run workflow。跑完看日志，最后几行会显示每个来源新增多少条、有没有报错。
@@ -37,8 +36,10 @@ GitHub Actions（每天北京时间 7:17）
 ## 费用
 
 - GitHub：公开仓库的 Actions 免费。
-- AI 摘要：默认用 Claude Haiku，每条只生成一次，每次最多 80 条（手动运行时可以改）。
-  想换模型，在 Settings → Secrets and variables → Actions → Variables 里加 `ANTHROPIC_MODEL`。
+- AI 摘要：默认用 **GitHub Models 免费额度**（模型 `openai/gpt-4.1-mini`），不用填任何密钥。
+  免费额度每天有次数限制，用完了当天剩下的摘要会在下次运行时自动补上；每次最多 40 条。
+  想换模型：Settings → Secrets and variables → Actions → Variables 里加 `GITHUB_MODEL`。
+  以后想用质量更好的 Claude：在 Secrets 里加 `ANTHROPIC_API_KEY`，会自动改用 Claude（付费）。
 
 ## 可能遇到的问题
 

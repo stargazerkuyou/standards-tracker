@@ -2,7 +2,9 @@
 
 本地运行：  cd scraper && python fetch.py
 环境变量：
-  ANTHROPIC_API_KEY   不设置就只抓取、不生成摘要
+  ANTHROPIC_API_KEY   设置了就用 Claude 生成摘要
+  GITHUB_TOKEN        没有 Claude 密钥时，用 GitHub Models 免费生成（Actions 里自动提供）
+  两个都没有就只抓取、不生成摘要
   MAX_AI              每次最多生成多少条摘要（控制费用），默认 80
 """
 import hashlib
@@ -55,13 +57,16 @@ def main():
     ai_budget = [MAX_AI]
 
     def try_ai(it, text):
-        if ai_budget[0] <= 0 or not os.environ.get("ANTHROPIC_API_KEY"):
+        if ai_budget[0] <= 0 or not summarize.backend():
             return
         try:
             ai = summarize.summarize(it, text)
             if ai:
                 apply_ai(it, ai)
                 ai_budget[0] -= 1
+        except summarize.RateLimited as e:
+            print(f"  {e}，剩下的摘要下次运行再补")
+            ai_budget[0] = 0
         except Exception as e:  # noqa: BLE001
             print(f"  AI 摘要失败 {it['url']}: {e}")
 
@@ -105,7 +110,7 @@ def main():
     pending = [it for it in items.values() if not it.get("ai") and it["id"] not in texts]
     pending.sort(key=lambda x: x.get("date") or "", reverse=True)
     for it in pending:
-        if ai_budget[0] <= 0 or not os.environ.get("ANTHROPIC_API_KEY"):
+        if ai_budget[0] <= 0 or not summarize.backend():
             break
         try:
             if it["source"] == "mof":
@@ -138,7 +143,7 @@ def main():
         print(f"[{v['name']}] 新增 {v['added']} 条，错误 {len(v['errors'])} 个")
         for e in v["errors"][:5]:
             print("   ", e.splitlines()[0])
-    print(f"共 {len(db['items'])} 条，本次生成摘要 {MAX_AI - ai_budget[0]} 条")
+    print(f"共 {len(db['items'])} 条，本次生成摘要 {MAX_AI - ai_budget[0] if ai_budget[0] > 0 else '若干'} 条（AI：{summarize.backend() or '未启用'}）")
 
     if all(not v["ok"] for v in status.values()):
         print("所有来源都抓取失败，请检查网站是否改版或屏蔽了 GitHub 的服务器")

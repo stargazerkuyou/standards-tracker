@@ -8,10 +8,11 @@ on:
     inputs:
       max_ai:
         description: "本次最多生成多少条 AI 摘要"
-        default: "80"
+        default: "40"
 
 permissions:
   contents: write
+  models: read        # 允许用 GitHub Models 免费生成 AI 摘要
 
 concurrency:
   group: fetch
@@ -36,7 +37,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
-          MAX_AI: ${{ github.event.inputs.max_ai || '80' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_MODEL: ${{ vars.GITHUB_MODEL }}
+          MAX_AI: ${{ github.event.inputs.max_ai || '40' }}
         run: python scraper/fetch.py
 
       - name: 有变化就提交

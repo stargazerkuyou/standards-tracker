@@ -1,7 +1,9 @@
-"""调用 Claude API 给每条动态生成中文摘要。每条只生成一次，结果存进 data.json。
+"""给每条动态生成中文摘要。每条只生成一次，结果存进 data.json。
 
-需要环境变量 ANTHROPIC_API_KEY（在 GitHub 仓库 Settings → Secrets 里配置）。
-可选 ANTHROPIC_MODEL，默认用便宜快速的 Haiku。
+两种 AI 来源，自动选择：
+1. 设置了 ANTHROPIC_API_KEY → 用 Claude（付费，质量更好；可选 ANTHROPIC_MODEL）
+2. 否则用 GitHub Models（免费，有每日次数限制；在 Actions 里用自带的 GITHUB_TOKEN，无需任何密钥；
+   可在仓库 Variables 里设 GITHUB_MODEL 换模型）
 """
 import json
 import os
@@ -10,7 +12,21 @@ import re
 import requests
 
 API = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+MODEL = os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5"
+GH_API = "https://models.github.ai/inference/chat/completions"
+GH_MODEL = os.environ.get("GITHUB_MODEL") or "openai/gpt-4.1-mini"
+
+
+class RateLimited(Exception):
+    """免费额度用完了，今天先停，明天自动补。"""
+
+
+def backend():
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("GITHUB_TOKEN"):
+        return "github"
+    return None
 TYPES = ["准则发布", "解释", "征求意见", "解读指引", "会议决定", "动态"]
 
 SYSTEM = """你是一名资深会计准则研究员，帮一位在企业做财务实务工作的中国会计人员快速判断准则动态。
@@ -46,20 +62,38 @@ PROMPT = """请阅读下面这条{source}动态，输出 JSON，字段如下：
 
 
 def summarize(item, text):
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
+    be = backend()
+    if not be:
         return None
     source = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB/ISSB）"}.get(item["source"], item["source"])
+    limit = 9000 if be == "anthropic" else 4500   # 免费模型单次输入有长度限制
     prompt = PROMPT.format(source=source, section=item.get("section") or "", title=item["title"],
                            date=item.get("date") or "", url=item["url"], types="/".join(TYPES),
-                           text=(text or "")[:9000])
-    r = requests.post(API, timeout=120, headers={
-        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-        json={"model": MODEL, "max_tokens": 1200, "system": SYSTEM,
-              "messages": [{"role": "user", "content": prompt}]})
-    r.raise_for_status()
-    out = "".join(b.get("text", "") for b in r.json().get("content", []))
-    return parse_json(out)
+                           text=(text or "")[:limit])
+    if be == "anthropic":
+        r = requests.post(API, timeout=120, headers={
+            "x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01",
+            "content-type": "application/json"},
+            json={"model": MODEL, "max_tokens": 1200, "system": SYSTEM,
+                  "messages": [{"role": "user", "content": prompt}]})
+        if r.status_code == 429:
+            raise RateLimited("Claude API 限流")
+        r.raise_for_status()
+        out = "".join(b.get("text", "") for b in r.json().get("content", []))
+        model = MODEL
+    else:
+        r = requests.post(GH_API, timeout=120, headers={
+            "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json"},
+            json={"model": GH_MODEL, "max_tokens": 1200, "temperature": 0.2,
+                  "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]})
+        if r.status_code == 429:
+            raise RateLimited("GitHub Models 今日免费额度已用完")
+        r.raise_for_status()
+        out = r.json()["choices"][0]["message"]["content"]
+        model = GH_MODEL
+    data = parse_json(out)
+    data["model"] = model
+    return data
 
 
 def parse_json(out):
@@ -73,5 +107,4 @@ def parse_json(out):
         data["importance"] = "中"
     data["changes"] = [c for c in (data.get("changes") or []) if isinstance(c, str)][:5]
     data["standards"] = [s for s in (data.get("standards") or []) if isinstance(s, dict)][:6]
-    data["model"] = MODEL
     return data
