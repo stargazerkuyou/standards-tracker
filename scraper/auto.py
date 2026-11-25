@@ -133,7 +133,7 @@ def mof_summary(text):
         picked.append(l)                     # 正文开始后，短行也要（网页常把一句话拆成几段）
         if sum(len(x) for x in picked) > 120:
             break
-    s = "".join(picked).lstrip("，。、；：,.;: ")
+    s = re.sub(r"【[^】]{1,8}】", "", "".join(picked)).lstrip("，。、；：,.;: ")
     return (s[:220] + "……") if len(s) > 220 else (s or None)
 
 
