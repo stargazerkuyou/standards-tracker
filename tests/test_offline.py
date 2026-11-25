@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scraper"))
 
 import common  # noqa: E402
-from sources import mof, ifrs  # noqa: E402
+from sources import mof, ifrs, csrc  # noqa: E402
 import summarize  # noqa: E402
 import fetch  # noqa: E402
 import auto  # noqa: E402
@@ -95,6 +95,27 @@ def test_parsers():
     check(ai["type"] is None and ai["importance"] == "中" and ai["changes"] == ["a"], "AI 输出清洗")
 
 
+def test_csrc():
+    print("证监会")
+    js = {"data": {"total": 3, "results": [
+        {"title": "<em>监管规则适用指引——会计类第6号</em>", "url": "/csrc/c100038/c7700001/content.shtml", "publishedTimeStr": "2026-11-20 18:00:00"},
+        {"title": "监管规则适用指引——发行类第9号", "url": "/csrc/c100038/c7700002/content.shtml", "publishedTimeStr": "2026-11-18"},
+        {"title": "证监会发布2025年上市公司年报会计监管报告", "url": "https://www.csrc.gov.cn/csrc/c100028/c7700003/content.shtml", "publishedTime": 1793000000000}]}}
+    check(len(csrc._find_results(js)) == 3, "找到结果列表")
+    class R:
+        def raise_for_status(self): pass
+        def json(self): return js
+    csrc.session.get = lambda *a, **k: R()
+    rows = csrc.search_list("x")
+    check(rows[0][0] == "监管规则适用指引——会计类第6号" and rows[0][2] == "2026-11-20" and rows[0][1].startswith("https://www.csrc.gov.cn/csrc/"), f"标题去标签、日期、网址：{rows[0]}")
+    check(rows[2][2] and rows[2][2].startswith("2026"), f"毫秒时间戳日期：{rows[2][2]}")
+    csrc.get = lambda url, **k: '<meta name="channelid" content="0123456789abcdef0123456789abcdef">'
+    items, errs, stats = csrc.fetch_list()
+    titles = [i["title"] for i in items]
+    check("监管规则适用指引——发行类第9号" not in titles and "监管规则适用指引——会计类第6号" in titles, f"只收会计相关：{titles}")
+    check(all(i["framework"] == "监管" for i in items) and not errs, f"分类=监管，无错误 {errs}")
+
+
 def test_auto():
     print("自动中文信息")
     d = auto.extract_dates("请组织征求意见，并于2026年10月11日前将意见反馈至财政部会计司。本解释自2027年1月1日起施行。")
@@ -111,6 +132,7 @@ def test_main():
     print("主流程")
     fake = fake_get_factory()
     common.get = mof.get = ifrs.get = fake
+    csrc.fetch_list = lambda: ([], [], ["测试: 列表 0 条，相关 0 条"])
     calls = []
 
     def fake_summarize(item, text):
@@ -151,6 +173,7 @@ def test_main():
 
 if __name__ == "__main__":
     test_parsers()
+    test_csrc()
     test_auto()
     test_main()
     print("\n全部通过" if not check.failed else "\n有失败项")

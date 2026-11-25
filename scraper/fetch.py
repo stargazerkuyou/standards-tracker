@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from common import now_iso  # noqa: E402
-from sources import mof, ifrs  # noqa: E402
+from sources import mof, ifrs, csrc  # noqa: E402
 import summarize  # noqa: E402
 import auto  # noqa: E402
 
@@ -27,7 +27,7 @@ META = ROOT / "data" / "meta.json"
 MAX_ITEMS = 3000
 MAX_AI = int(os.environ.get("MAX_AI", "80"))
 
-SOURCE_NAMES = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB / 解释委员会 / ISSB）"}
+SOURCE_NAMES = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB / 解释委员会 / ISSB）", "csrc": "证监会（会计监管）"}
 
 
 def load():
@@ -52,6 +52,9 @@ def apply_ai(item, ai):
 def main():
     db = load()
     items = {it["id"]: it for it in db["items"]}
+    for it in items.values():          # 分类改名
+        if it.get("framework") == "审计监管":
+            it["framework"] = "监管"
     first_run = not items
     status = {}
     texts = {}        # 本次抓到的正文，供 AI 使用
@@ -109,6 +112,29 @@ def main():
     status["mof"] = {"name": SOURCE_NAMES["mof"], "added": added, "errors": errs[:10],
                      "ok": added > 0 or not errs, "checked_at": now_iso()}
 
+    # ---------- 证监会 ----------
+    errs, added, stats = [], 0, []
+    try:
+        listed, errs, stats = csrc.fetch_list()
+        for it in listed:
+            if it["id"] in items:
+                continue
+            try:
+                text, att = csrc.fetch_detail(it)
+                it["attachments"] = att
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"详情 {it['url']}: {e}")
+                text = ""
+            texts[it["id"]] = text
+            items[it["id"]] = it
+            added += 1
+            do_auto(it, text)
+            try_ai(it, text)
+    except Exception as e:  # noqa: BLE001
+        errs.append(f"{e}\n{traceback.format_exc(limit=2)}")
+    status["csrc"] = {"name": SOURCE_NAMES["csrc"], "added": added, "errors": errs[:10], "stats": stats,
+                      "ok": bool(stats), "checked_at": now_iso()}   # 至少一个栏目读成功就算正常
+
     # ---------- IFRS ----------
     errs, added = [], 0
     try:
@@ -154,8 +180,8 @@ def main():
     need.sort(key=lambda x: x.get("date") or "", reverse=True)
     for it in need[:150]:
         try:
-            if it["source"] == "mof":
-                text, att = mof.fetch_detail(it)
+            if it["source"] in ("mof", "csrc"):
+                text, att = (mof if it["source"] == "mof" else csrc).fetch_detail(it)
                 it.setdefault("attachments", att)
             else:
                 text = ifrs.parse_article(ifrs.get(it["url"]), it["url"])["text"]
@@ -171,8 +197,8 @@ def main():
         if ai_budget[0] <= 0 or not summarize.backend():
             break
         try:
-            if it["source"] == "mof":
-                text, _ = mof.fetch_detail(it)
+            if it["source"] in ("mof", "csrc"):
+                text, _ = (mof if it["source"] == "mof" else csrc).fetch_detail(it)
             else:
                 text = ifrs.parse_article(ifrs.get(it["url"]), it["url"])["text"]
         except Exception:  # noqa: BLE001
@@ -207,6 +233,8 @@ def main():
             print("   ", e.splitlines()[0])
     print(f"共 {len(db['items'])} 条，本次生成摘要 {MAX_AI - ai_budget[0] if ai_budget[0] > 0 else '若干'} 条（AI：{summarize.backend() or '未启用'}）")
 
+    for line in status.get("csrc", {}).get("stats", []):
+        print("   证监会", line)
     if all(not v["ok"] for v in status.values()):
         print("所有来源都抓取失败，请检查网站是否改版或屏蔽了 GitHub 的服务器")
         sys.exit(1)

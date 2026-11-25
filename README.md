@@ -14,7 +14,7 @@ GitHub Actions（每天北京时间 7:17）
 
 | 路径 | 作用 |
 |---|---|
-| `scraper/` | 抓取脚本（Python）。`sources/mof.py` 财政部，`sources/ifrs.py` IFRS，`summarize.py` AI 摘要 |
+| `scraper/` | 抓取脚本（Python）。`sources/mof.py` 财政部，`sources/ifrs.py` IFRS，`sources/csrc.py` 证监会会计监管，`auto.py` 机器翻译和规则提取，`summarize.py` AI 摘要（可选） |
 | `data/` | 自动生成的数据，不要手改 |
 | `app/index.html` | App 界面（单文件 HTML），电脑浏览器也能直接打开看 |
 | `android/` | 安卓外壳（WebView），由 GitHub 自动打包。签名钥匙也在这里（个人自用，只从自己仓库的 Releases 下载安装） |
@@ -49,5 +49,5 @@ GitHub Actions（每天北京时间 7:17）
 
 ## 以后加来源
 
-数据结构已经预留了四类体系：`中国准则 / IFRS / 可持续 / 审计监管`。新增一个来源（如中注协、证监会、IAASB）的方法：
+数据结构已经预留了四类体系：`中国准则 / IFRS / 可持续 / 监管`（证监会会计监管归“监管”）。新增一个来源的方法：
 在 `scraper/sources/` 新建一个文件，仿照 `mof.py` 写好列表解析，再在 `fetch.py` 里加一段调用。

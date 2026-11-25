@@ -91,7 +91,7 @@ def summarize(item, text):
     be = backend()
     if not be:
         return None
-    source = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB/ISSB）"}.get(item["source"], item["source"])
+    source = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB/ISSB）", "csrc": "中国证监会"}.get(item["source"], item["source"])
     limit = 9000
     prompt = PROMPT.format(source=source, section=item.get("section") or "", title=item["title"],
                            date=item.get("date") or "", url=item["url"], types="/".join(TYPES),

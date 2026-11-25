@@ -87,7 +87,7 @@ def guess_framework(title, default):
             or "nature-related" in tl or "climate" in tl or "气候" in t:
         return "可持续"
     if "审计" in t or "注册会计师" in t or "audit" in tl or "iaasb" in tl:
-        return "审计监管"
+        return "监管"
     return default
 
 
@@ -118,7 +118,7 @@ def new_item(*, url, title, source, framework, date=None, kind=None, section=Non
         "title": title.strip(),
         "source": source,          # mof / ifrs ...
         "section": section,        # 栏目
-        "framework": framework,    # 中国准则 / IFRS / 可持续 / 审计监管
+        "framework": framework,    # 中国准则 / IFRS / 可持续 / 监管
         "type": kind or guess_type(title),
         "date": date,
         "standards": find_standards(title),
