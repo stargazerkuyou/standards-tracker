@@ -20,7 +20,8 @@ auto.time.sleep = lambda s: None
 
 MOF_LIST = """<html><body><div class="nav"><a href="/">首页</a><span>2017年11月21日</span></div>
 <ul class="liBox">
-<li><a href="./202611/t20261105_4004148.htm" title="关于印发《会计改革与发展“十五五”规划》的通知">关于印发《会计改革与发展“十五五”规划》的通知</a><span>2026-11-11</span></li>
+<li><a href="./202611/t20261105_4004148.htm" title="关于印发《企业会计准则第30号——财务报表列报》的通知">关于印发《企业会计准则第30号——财务报表列报》的通知</a><span>2026-11-11</span></li>
+<li><a href="./202611/t20261106_4004149.htm" title="关于印发《会计改革与发展“十五五”规划》的通知">关于印发《会计改革与发展“十五五”规划》的通知</a><span>2026-11-12</span></li>
 <li><a href="./202609/t20260910_4001234.htm" title="关于征求《企业会计准则解释第22号(征求意见稿)》意见的函">关于征求《企业会计准则解释第22号(征求意见稿)》意见的函</a><span>2026-09-15</span></li>
 <li><a href="./202610/t20261001_4000001.htm">财政部会计司党支部开展主题教育活动</a><span>2026-10-01</span></li>
 </ul>
@@ -76,11 +77,13 @@ check.failed = False
 def test_parsers():
     print("解析器")
     items = mof.parse_list(MOF_LIST, "http://kjs.mof.gov.cn/zhengcefabu/", "政策发布")
-    check(len(items) == 2, f"财政部列表解析出 2 条（跳过党建），实际 {len(items)}")
+    check(len(items) == 3, f"财政部列表解析出 3 条（跳过党建），实际 {len(items)}")
     check(items[0]["date"] == "2026-11-11", f"用列表显示日期而不是链接日期：{items[0]['date']}")
+    import relevance
+    check([relevance.keep(i) for i in items] == [True, False, True], "相关性：准则留下、规划去掉")
     check(items[0]["url"] == "http://kjs.mof.gov.cn/zhengcefabu/202611/t20261105_4004148.htm", "相对链接补全")
-    check(items[1]["type"] == "征求意见", f"征求意见函分类：{items[1]['type']}")
-    check("CAS 解释22" in items[1]["standards"], f"识别解释编号：{items[1]['standards']}")
+    check(items[2]["type"] == "征求意见", f"征求意见函分类：{items[2]['type']}")
+    check("CAS 解释22" in items[2]["standards"], f"识别解释编号：{items[2]['standards']}")
     text, att = mof.parse_article(MOF_ARTICLE, "http://kjs.mof.gov.cn/zhengcefabu/202609/t.htm")
     check("2026年10月11日" in text and len(att) == 1, "正文和附件")
     art = ifrs.parse_article(IFRS_ARTICLE, "https://www.ifrs.org/news-and-events/news/2026/11/x/")
@@ -157,8 +160,9 @@ def test_main():
         fetch.main()
         db = json.loads(fetch.DATA.read_text("utf-8"))
         n1 = len(db["items"])
-        check(n1 == 6, f"首次运行 6 条（财政部两个栏目各 2 + IFRS 2），实际 {n1}")
-        check(len(calls) == 6, "每条都生成了摘要")
+        check(n1 == 5, f"首次运行 5 条（财政部两个栏目各 2 + IFRS 1，主席专访被过滤），实际 {n1}")
+        check(len(calls) == 5, "每条都生成了摘要")
+        check(len(db["skipped"]) >= 2, f"不相关的记进 skipped：{len(db['skipped'])}")
         check(all(it["ai"] for it in db["items"]), "摘要已写入")
         check("CAS 21" in db["items"][0]["standards"], "AI 给出的准则编号并入 standards")
         check(db["sources"]["mof"]["ok"] and db["sources"]["ifrs"]["ok"], "来源状态正常")
@@ -167,11 +171,11 @@ def test_main():
         mof_it = [x for x in db["items"] if "征求" in x["title"]][0]
         check(mof_it["auto"]["comment_deadline"] == "2026-10-11", f"财政部截止日：{mof_it['auto']}")
         meta = json.loads(fetch.META.read_text("utf-8"))
-        check(meta["count"] == 6 and len(meta["version"]) == 12, "meta.json")
+        check(meta["count"] == 5 and len(meta["version"]) == 12, "meta.json")
         calls.clear()
         fetch.main()
         db2 = json.loads(fetch.DATA.read_text("utf-8"))
-        check(len(db2["items"]) == 6 and not calls, "第二次运行不重复添加、不重复调用 AI")
+        check(len(db2["items"]) == 5 and not calls, "第二次运行不重复添加、不重复调用 AI")
         meta2 = json.loads(fetch.META.read_text("utf-8"))
         check(meta2["version"] == meta["version"], "数据没变时 version 不变（App 就不用重新下载）")
         # 输出一份样例数据给 App 测试用

@@ -20,6 +20,7 @@ from common import now_iso  # noqa: E402
 from sources import mof, ifrs, csrc  # noqa: E402
 import summarize  # noqa: E402
 import auto  # noqa: E402
+import relevance  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "data.json"
@@ -52,9 +53,23 @@ def apply_ai(item, ai):
 def main():
     db = load()
     items = {it["id"]: it for it in db["items"]}
-    for it in items.values():          # 分类改名
-        if it.get("framework") == "审计监管":
+    skipped = set(db.get("skipped", []))   # 判定为不相关的网址，以后不再抓
+    for it in list(items.values()):
+        if it.get("framework") == "审计监管":   # 分类改名
             it["framework"] = "监管"
+        if not relevance.keep(it):
+            skipped.add(it["id"])
+            del items[it["id"]]
+        elif not (it.get("ai") or {}).get("type"):
+            it["type"] = relevance.classify(it)
+
+    def relevant(it):
+        if relevance.keep(it):
+            if not (it.get("ai") or {}).get("type"):
+                it["type"] = relevance.classify(it)
+            return True
+        skipped.add(it["id"])
+        return False
     first_run = not items
     status = {}
     texts = {}        # 本次抓到的正文，供 AI 使用
@@ -94,7 +109,7 @@ def main():
     try:
         listed, errs = mof.fetch_list()
         for it in listed:
-            if it["id"] in items:
+            if it["id"] in items or it["id"] in skipped or not relevant(it):
                 continue
             try:
                 text, att = mof.fetch_detail(it)
@@ -117,7 +132,7 @@ def main():
     try:
         listed, errs, stats = csrc.fetch_list()
         for it in listed:
-            if it["id"] in items:
+            if it["id"] in items or it["id"] in skipped or not relevant(it):
                 continue
             try:
                 text, att = csrc.fetch_detail(it)
@@ -138,8 +153,10 @@ def main():
     # ---------- IFRS ----------
     errs, added = [], 0
     try:
-        new, errs = ifrs.fetch_new(set(items), months_back=6 if first_run else 3, limit=150)
+        new, errs = ifrs.fetch_new(set(items) | skipped, months_back=6 if first_run else 3, limit=150)
         for it, text in new:
+            if not relevant(it):
+                continue
             items[it["id"]] = it
             texts[it["id"]] = text
             added += 1
@@ -210,6 +227,7 @@ def main():
         prev = db["sources"].get(k, {})
         v["last_success"] = v["checked_at"] if v["ok"] else prev.get("last_success")
     db["sources"].update(status)
+    db["skipped"] = sorted(skipped)[-5000:]
     db["auto_status"] = dict(auto.status, checked_at=now_iso())
     db["ai_status"] = {"backend": summarize.backend(), "checked_at": now_iso(),
                        "made": MAX_AI - ai_budget[0] if not ai_note and ai_budget[0] > 0 else None,

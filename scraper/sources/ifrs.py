@@ -122,7 +122,9 @@ def fetch_new(known_ids, months_back, limit):
         xml = get(SITEMAP, timeout=60)
     except Exception as e:  # noqa: BLE001
         return [], [f"sitemap: {e}"]
-    urls = [u for u in list_news_urls(xml, months_back) if make_id(u) not in known_ids]
+    from relevance import IFRS_DROP
+    urls = [u for u in list_news_urls(xml, months_back) if make_id(u) not in known_ids
+            and not IFRS_DROP.search(u.rstrip("/").rsplit("/", 1)[-1].replace("-", " "))]
     # sitemap 大致按时间顺序排列，新的在后面
     urls = urls[::-1][:limit]
     out = []
