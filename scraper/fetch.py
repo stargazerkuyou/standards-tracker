@@ -9,6 +9,7 @@
 """
 import hashlib
 import json
+import re
 import os
 import sys
 import traceback
@@ -57,6 +58,8 @@ def main():
     items = {it["id"]: it for it in db["items"]}
     skipped = set(db.get("skipped", []))   # 判定为不相关的网址，以后不再抓
     for it in list(items.values()):
+        if it.get("source") == "szse":
+            it["title"] = re.sub(r"\s*20\d{2}-\d{2}-\d{2}\s*$", "", it["title"])
         if it.get("framework") == "审计监管":   # 分类改名
             it["framework"] = "监管"
         if not relevance.keep(it):
@@ -84,18 +87,22 @@ def main():
             old = it.get("auto") or {}
             att_text, att_name = "", None
             if it["source"] in ("mof", "csrc", "szse") and it.get("attachments"):
-                att_text, att_name = attach.read(it["attachments"])
+                att_text, att_name = attach.read(it["attachments"], max_pages=60 if it["source"] == "szse" else 12)
             # 正文太短（多半只有一段“现印发给你们”），就把附件内容也拿来生成摘要
             body = text if len(text or "") >= 400 or not att_text else (text or "") + "\n" + att_text
             new = auto.build(it, body, keep_title=old.get("title_zh"))
-            if att_text:
-                new["changes"] = (szse.case_headings(att_text) if it["source"] == "szse" else []) or attach.headings(att_text)
+            if att_text and it["source"] == "szse":
+                new["changes"] = szse.case_headings(att_text)
+                new["summary"] = szse.summary(att_text) or new.get("summary")
+                new["from_attachment"] = att_name
+            elif att_text:
+                new["changes"] = attach.headings(att_text)
                 new["from_attachment"] = att_name
                 if not new.get("comment_deadline") and not new.get("effective_date"):
                     d = auto.extract_dates(att_text)
                     if it.get("type") in ("准则发布", "解释"):
                         new["effective_date"] = d["effective_date"]
-            new["v"] = 8
+            new["v"] = 9
             it["auto"] = new
         except Exception as e:  # noqa: BLE001
             print("  自动摘要失败", it["url"], e)
@@ -227,7 +234,7 @@ def main():
         print(f"修正了 {fixed} 条 IFRS 日期")
 
     # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
-    AUTO_VER = 8   # 规则改了就加 1，已有条目会重新提取一次
+    AUTO_VER = 9   # 规则改了就加 1，已有条目会重新提取一次
     need = [x for x in items.values() if x["id"] not in texts and (
         "auto" not in x or (x["source"] != "ifrs" and (x.get("auto") or {}).get("v", 1) < AUTO_VER)
         or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh"))

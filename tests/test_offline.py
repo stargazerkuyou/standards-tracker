@@ -128,12 +128,12 @@ def test_csrc_column():
 
 def test_szse():
     print("深交所")
-    html = """<ul><li><a href="./202608/t20260826_5601.html">《深圳证券交易所会计监管动态》（2026年第2期）</a><span>2026-08-26</span></li>
+    html = """<ul><li><a href="./202608/t20260826_5601.html">《深圳证券交易所会计监管动态》（2026年第2期） 2026-08-26</a></li>
     <li><a href="./202604/t20260409_5581.html">《深圳证券交易所会计监管动态》（2026年第1期）</a><span>2026-04-09</span></li>
     <li><a href="/other/x.html">无关链接</a></li></ul>"""
     items = szse.parse_list(html, "https://smehome.szse.cn/trends/accounting_supervise/index.html")
     check(len(items) == 2 and items[0]["date"] == "2026-08-26" and items[0]["url"].endswith("/202608/t20260826_5601.html"), f"深交所列表：{[(i['title'], i['date']) for i in items]}")
-    check(items[0]["framework"] == "监管" and items[0]["source"] == "szse", "分类=监管")
+    check(items[0]["framework"] == "监管" and items[0]["title"].endswith("（2026年第2期）"), f"分类=监管，标题去掉日期：{items[0]['title']}")
     t = """目录
 一、深市会计审计监管通讯 3
 三、典型会计案例研究 12
@@ -141,13 +141,18 @@ def test_szse():
 一、深市会计审计监管通讯
 （一）审计评估机构纪律处分情况
 三、典型会计案例研究
-（一）外购在研项目资本化的判断
+(一)研发支出及无形资产相关问题
+案例一:关于外购在研专利技术的会计
+处理
 案例背景：A公司……
-（二）员工持股计划参与定向增发是否构成股份支付
+深圳证券交易所会计监管动态 2026 年第 2 期
+案例二:关于委托开发软件摊销时点的判断
 四、会计审计政策资讯
 （一）财政部发布修订后财务报表列报准则"""
     hs = szse.case_headings(t)
-    check(hs == ["（一）外购在研项目资本化的判断", "（二）员工持股计划参与定向增发是否构成股份支付"], f"案例标题：{hs}")
+    check(hs == ["(一)研发支出及无形资产相关问题", "案例一:关于外购在研专利技术的会计处理", "案例二:关于委托开发软件摊销时点的判断"], f"案例标题：{hs}")
+    sm = szse.summary("编者按……会计案例方面，本期主要围绕创新创业企业经常遇到的研发和股份支付相关会计处理，分析两组典型案例。会计审计政策资讯方面……")
+    check(sm and sm.startswith("会计案例方面，本期主要围绕") and sm.endswith("典型案例。"), f"深交所摘要：{sm}")
 
 
 def test_auto():
@@ -169,7 +174,7 @@ def test_main():
     csrc.fetch_list = lambda: ([], [], ["测试: 列表 0 条，相关 0 条"])
     szse.fetch_list = lambda: ([], [])
     import attach
-    attach.read = lambda atts: ("企业会计准则解释第22号\n一、关于售后租回交易的列报\n二、关于数据资源的收入确认", "1.解释.pdf")
+    attach.read = lambda atts, max_pages=12: ("企业会计准则解释第22号\n一、关于售后租回交易的列报\n二、关于数据资源的收入确认", "1.解释.pdf")
     calls = []
 
     def fake_summarize(item, text):

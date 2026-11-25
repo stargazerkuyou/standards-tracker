@@ -24,6 +24,7 @@ def parse_list(html, page_url=LIST_URL):
         if not m or href in seen:
             continue
         title = (a.get("title") or a.get_text(" ", strip=True)).strip()
+        title = re.sub(r"\s*20\d{2}-\d{2}-\d{2}\s*$", "", title)      # 链接文字末尾带的日期
         if "会计监管" not in title:
             continue
         seen.add(href)
@@ -60,28 +61,47 @@ def fetch_detail(item):
     return text, att
 
 
-CASE_SECTION = re.compile(r"[三四五]、\s*(?:典型)?(?:会计)?案例研究")
-NEXT_SECTION = re.compile(r"^\s*[四五六]、\s*(?:会计|审计|政策)")
-CASE_HEAD = re.compile(r"^\s*(?:（[一二三四五六七八九十]{1,3}）|\([一二三四五六七八九十]{1,3}\)|案例[一二三四五六七八九十\d]+[：:、]?|问题\s*\d+\s*[【\[]?)(.{4,60})$")
+CASE_SECTION = re.compile(r"^\s*[二三四五]、\s*(?:典型)?(?:会计)?案例(?:研究|分析)?\s*$")
+NEXT_SECTION = re.compile(r"^\s*[三四五六七]、.*(?:资讯|政策|动态|通讯)")
+PAGE_HEADER = re.compile(r"会计监管动态\s*20\d{2}\s*年")
+CASE_HEAD = re.compile(r"^\s*(?:\([一二三四五六七八九十]{1,3}\)|案例[一二三四五六七八九十\d]{1,3}\s*[:：、]?|问题\s*\d+\s*[【\[]?)(.{4,70})$")
 
 
-def case_headings(text, limit=8):
-    """附件里「典型会计案例研究」部分的小标题，例如“（一）外购在研项目资本化的判断”。"""
-    lines = (text or "").splitlines()
-    starts = [i for i, l in enumerate(lines) if CASE_SECTION.search(l)]
+def case_headings(text, limit=10):
+    """附件里「典型会计案例研究」部分的小标题，例如“(一)研发支出及无形资产相关问题”“案例一:关于外购在研专利技术的会计处理”。"""
+    lines = [l.strip() for l in (text or "").splitlines()]
+    starts = [i for i, l in enumerate(lines) if CASE_SECTION.match(l)]
     if not starts:
         return []
-    # 第一次出现多半是目录，取最后一次（正文里的那个）
     out = []
-    for line in lines[starts[-1] + 1:]:
+    for i in range(starts[-1] + 1, len(lines)):     # 第一次出现多半是目录，取正文里那一次
+        line = lines[i]
         if NEXT_SECTION.match(line):
             break
-        m = CASE_HEAD.match(line.strip())
-        if m:
-            h = re.sub(r"\s+", "", line.strip())
-            h = re.sub(r"[.．…·]{3,}.*$", "", h).rstrip("。；;，,")
-            if 6 <= len(h) and h not in out:
-                out.append(h[:60])
+        if PAGE_HEADER.search(line):
+            continue
+        m = CASE_HEAD.match(line)
+        if not m:
+            continue
+        h = re.sub(r"\s+", "", line)
+        # 标题被换行截断：下一行很短且不是新标题，就接上
+        if not re.search(r"(问题|处理|判断|影响|确认|计量|列报|披露|识别|分类|核算)$", h) and i + 1 < len(lines):
+            nxt = re.sub(r"\s+", "", lines[i + 1])
+            if nxt and len(nxt) < 30 and not CASE_HEAD.match(lines[i + 1]) and not PAGE_HEADER.search(nxt):
+                h += nxt
+        h = re.sub(r"[.．…·]{3,}.*$", "", h).rstrip("。；;，,")
+        if len(h) >= 6 and h not in out:
+            out.append(h[:70])
         if len(out) >= limit:
             break
     return out
+
+
+def summary(text):
+    """每期导语里“会计案例方面，本期……”那句话最能说明这期讲了什么。"""
+    t = re.sub(r"\s+", "", text or "")
+    m = re.search(r"会计案例方面[，,](.{10,200}?。)", t)
+    if m:
+        return "会计案例方面，" + m.group(1)
+    m = re.search(r"本期《深圳证券交易所会计监管动态》(.{10,200}?。)", t)
+    return ("本期" + m.group(1)) if m else None

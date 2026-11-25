@@ -45,14 +45,14 @@ def main_attachment(atts):
     return cands[0] if cands else None
 
 
-def read(atts):
+def read(atts, max_pages=12):
     """返回 (正文附件的文字, 附件名)；失败返回 ("", None)。"""
     a = main_attachment(atts)
     if not a:
         return "", None
     try:
         data = _download(a["url"])
-        text = pdf_text(data) if a["url"].lower().endswith(".pdf") else docx_text(data)
+        text = pdf_text(data, max_pages) if a["url"].lower().endswith(".pdf") else docx_text(data)
     except Exception as e:  # noqa: BLE001
         print("  附件读取失败", a["url"], e)
         return "", None
