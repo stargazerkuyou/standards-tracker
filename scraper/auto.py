@@ -126,9 +126,11 @@ def mof_summary(text):
     lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
     picked = []
     for l in lines:
-        if SKIP_LINE.search(l) or len(l) < 15:
+        if SKIP_LINE.search(l):
             continue
-        picked.append(l)
+        if not picked and len(l) < 15:      # 开头的短行（作者、栏目名）跳过
+            continue
+        picked.append(l)                     # 正文开始后，短行也要（网页常把一句话拆成几段）
         if sum(len(x) for x in picked) > 120:
             break
     s = "".join(picked).lstrip("，。、；：,.;: ")

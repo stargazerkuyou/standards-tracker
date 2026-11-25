@@ -101,11 +101,42 @@ def search_list(cid, page_size=20):
     return out
 
 
+ART_RE = re.compile(r"/csrc/c\d+/c[0-9a-z]+/content\.shtml$")
+
+
+def parse_column(html, page_url):
+    """栏目页本身就是普通网页时，直接从页面里读文章列表。"""
+    soup = BeautifulSoup(html, "lxml")
+    rows, seen = [], set()
+    for a in soup.find_all("a", href=True):
+        href = urljoin(page_url, a["href"].strip())
+        if not ART_RE.search(href) or href in seen:
+            continue
+        title = (a.get("title") or a.get_text(" ", strip=True)).strip()
+        if len(title) < 6:
+            continue
+        seen.add(href)
+        li = a.find_parent(["li", "tr"])
+        date = parse_date(li.get_text(" ", strip=True).replace(title, "")) if li else None
+        rows.append((title, href, date))
+    return rows
+
+
+def list_rows(ref):
+    if not ref.startswith("http"):
+        return search_list(ref)
+    html = get(ref, timeout=60)
+    rows = parse_column(html, ref)
+    if rows:
+        return rows
+    return search_list(channel_id(ref))
+
+
 def fetch_list():
     items, errors, stats = [], [], []
     for name, ref, kw in CHANNELS:
         try:
-            rows = search_list(channel_id(ref))
+            rows = list_rows(ref)
             kept = 0
             for title, link, date in rows:
                 if not kw.search(title):

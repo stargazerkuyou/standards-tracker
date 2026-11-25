@@ -116,6 +116,13 @@ def test_csrc():
     check(all(i["framework"] == "监管" for i in items) and not errs, f"分类=监管，无错误 {errs}")
 
 
+def test_csrc_column():
+    html = """<ul><li><a href="/csrc/c100029/cb7acea9e3b6c4c94bef46eb0ff3e5525/content.shtml" target="_blank">证监会发布2025年度上市公司年报会计监管报告</a><span>2026-08-15</span></li>
+    <li><a href="/csrc/c100029/c7700009/content.shtml">证监会召开座谈会</a><span>2026-08-10</span></li></ul>"""
+    rows = csrc.parse_column(html, "https://www.csrc.gov.cn/csrc/c100029/common_list.shtml")
+    check(len(rows) == 2 and rows[0][2] == "2026-08-15" and rows[0][1].startswith("https://www.csrc.gov.cn/csrc/c100029/"), f"证监会栏目网页解析：{rows[:1]}")
+
+
 def test_auto():
     print("自动中文信息")
     d = auto.extract_dates("请组织征求意见，并于2026年10月11日前将意见反馈至财政部会计司。本解释自2027年1月1日起施行。")
@@ -174,6 +181,7 @@ def test_main():
 if __name__ == "__main__":
     test_parsers()
     test_csrc()
+    test_csrc_column()
     test_auto()
     test_main()
     print("\n全部通过" if not check.failed else "\n有失败项")
