@@ -55,6 +55,8 @@ def main():
     status = {}
     texts = {}        # 本次抓到的正文，供 AI 使用
     ai_budget = [MAX_AI]
+    ai_errors = []
+    ai_note = []
 
     def try_ai(it, text):
         if ai_budget[0] <= 0 or not summarize.backend():
@@ -66,9 +68,13 @@ def main():
                 ai_budget[0] -= 1
         except summarize.RateLimited as e:
             print(f"  {e}，剩下的摘要下次运行再补")
+            ai_note.append(str(e))
             ai_budget[0] = 0
         except Exception as e:  # noqa: BLE001
             print(f"  AI 摘要失败 {it['url']}: {e}")
+            ai_errors.append(str(e)[:400])
+            if len(ai_errors) >= 3 and not any(x.get("ai") for x in items.values()):
+                ai_budget[0] = 0   # 连续失败、一条都没成功过：多半是配置问题，别浪费时间
 
     # ---------- 财政部 ----------
     errs, added = [], 0
@@ -106,6 +112,23 @@ def main():
     status["ifrs"] = {"name": SOURCE_NAMES["ifrs"], "added": added, "errors": errs[:10],
                       "ok": added > 0 or not errs, "checked_at": now_iso()}
 
+    # ---------- 修正只能猜测日期的 IFRS 条目 ----------
+    fixed = 0
+    for it in [x for x in items.values() if x["source"] == "ifrs" and x.get("date_guess")][:80]:
+        try:
+            art = ifrs.parse_article(ifrs.get(it["url"]), it["url"])
+            it["date"] = art["date"]
+            if not art.get("date_guess"):
+                it.pop("date_guess", None)
+                fixed += 1
+            if not it.get("ai"):
+                texts[it["id"]] = art["text"]
+                try_ai(it, art["text"])
+        except Exception as e:  # noqa: BLE001
+            print("  日期修正失败", it["url"], e)
+    if fixed:
+        print(f"修正了 {fixed} 条 IFRS 日期")
+
     # ---------- 补做以前没做成的摘要 ----------
     pending = [it for it in items.values() if not it.get("ai") and it["id"] not in texts]
     pending.sort(key=lambda x: x.get("date") or "", reverse=True)
@@ -126,6 +149,9 @@ def main():
         prev = db["sources"].get(k, {})
         v["last_success"] = v["checked_at"] if v["ok"] else prev.get("last_success")
     db["sources"].update(status)
+    db["ai_status"] = {"backend": summarize.backend(), "checked_at": now_iso(),
+                       "made": MAX_AI - ai_budget[0] if not ai_note and ai_budget[0] > 0 else None,
+                       "note": ai_note[:1], "errors": ai_errors[:3]}
     all_items = sorted(items.values(), key=lambda x: (x.get("date") or "", x["fetched_at"]), reverse=True)
     db["items"] = all_items[:MAX_ITEMS]
     db["updated_at"] = now_iso()

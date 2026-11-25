@@ -392,6 +392,8 @@ function renderSettings(){
       ${!s.ok && s.errors && s.errors.length ? `<div class="hint" style="word-break:break-all">${esc(s.errors[0].split('\n')[0])}</div>` : ''}`).join('') : '<div class="hint">尚未加载数据</div>';
   const n = items().length, withAi = items().filter(x => x.ai).length;
   return `<div class="sec"><h3>数据来源</h3>${srcs}
+      ${data && data.ai_status && data.ai_status.errors && data.ai_status.errors.length && !withAi ? `<div class="hint" style="color:#a8071a;word-break:break-all">AI 摘要出错：${esc(data.ai_status.errors[0])}</div>` : ''}
+      ${data && data.ai_status && data.ai_status.note && data.ai_status.note.length ? `<div class="hint">${esc(data.ai_status.note[0])}，剩下的下次自动补</div>` : ''}
       <div class="hint">共 ${n} 条，其中 ${withAi} 条已有 AI 摘要；数据更新于 ${data && data.updated_at ? new Date(data.updated_at).toLocaleString('zh-CN') : '—'}</div></div>
     <div class="sec form"><h3>显示</h3>
       <label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input type="checkbox" id="hideLow" style="width:auto" ${cfg.hideLow?'checked':''}> 隐藏低重要度动态（人事、会议活动、播客等）</label>

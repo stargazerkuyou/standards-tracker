@@ -4,6 +4,9 @@ name: 抓取准则动态
 on:
   schedule:
     - cron: "17 23 * * *"     # 每天 UTC 23:17 = 北京时间早上 7:17
+  push:                        # 抓取代码有改动时自动跑一次
+    branches: [main]
+    paths: ["scraper/**", ".github/workflows/fetch.yml"]
   workflow_dispatch:           # 也可以在 Actions 页面手动点 "Run workflow"
     inputs:
       max_ai:
@@ -23,9 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -52,5 +55,6 @@ jobs:
             echo "没有新内容"
           else
             git commit -m "数据更新 $(date -u +%Y-%m-%d)"
+            git pull --rebase origin main   # 运行期间如果有人改了代码，先合并再推
             git push
           fi

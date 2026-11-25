@@ -78,7 +78,8 @@ def summarize(item, text):
                   "messages": [{"role": "user", "content": prompt}]})
         if r.status_code == 429:
             raise RateLimited("Claude API 限流")
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"Claude API HTTP {r.status_code}: {r.text[:300]}")
         out = "".join(b.get("text", "") for b in r.json().get("content", []))
         model = MODEL
     else:
@@ -88,7 +89,8 @@ def summarize(item, text):
                   "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]})
         if r.status_code == 429:
             raise RateLimited("GitHub Models 今日免费额度已用完")
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"GitHub Models HTTP {r.status_code}: {r.text[:300]}")
         out = r.json()["choices"][0]["message"]["content"]
         model = GH_MODEL
     data = parse_json(out)

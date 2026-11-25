@@ -46,6 +46,7 @@ def parse_article(html, url):
     title = re.sub(r"\s*\|\s*IFRS.*$", "", title).strip()
     keywords = [k.strip() for k in meta("keywords").split(",") if k.strip()]
 
+    soup_text = soup.get_text(" ", strip=True)
     for t in soup(["script", "style", "nav", "header", "footer", "noscript"]):
         t.decompose()
     main = soup.find("main") or soup.find("article") or soup.body or soup
@@ -53,17 +54,35 @@ def parse_article(html, url):
     paras = [p for p in paras if len(p) > 30 and "cookie" not in p.lower()]
     text = "\n".join(paras)
 
-    d = parse_date(meta("article:published_time", "date", "publishdate", "dc.date"))
-    if not d:
-        top = main.get_text(" ", strip=True)[:3000]
-        d = parse_date(top)
-    if not d:
-        m = re.search(r"/news/(20\d{2})/(\d{2})/", url)
-        d = f"{m.group(1)}-{m.group(2)}-01"
-
+    d, guessed = find_date(soup_text, url, meta("article:published_time", "date", "publishdate", "dc.date"))
     label = next((k for k in keywords if k.lower() in
                   ("press release", "news", "news article", "statement", "speech", "podcast", "webcast")), "")
-    return {"title": title, "date": d, "keywords": keywords, "label": label, "text": text}
+    return {"title": title, "date": d, "date_guess": guessed, "keywords": keywords, "label": label, "text": text}
+
+
+DATE_ANY = re.compile(r"(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})"
+                      r"|(20\d{2})-(\d{2})-(\d{2})", re.I)
+
+
+def find_date(text, url, meta_date=""):
+    """页面里可能有很多日期（会议日期、生效日期……），取和网址年月最接近的那个。
+    返回 (YYYY-MM-DD, 是否只是猜测)。"""
+    m = re.search(r"/news/(20\d{2})/(\d{2})/", url)
+    uy, um = int(m.group(1)), int(m.group(2))
+    cands = []
+    if meta_date:
+        d = parse_date(meta_date)
+        if d:
+            cands.append(d)
+    for mm in DATE_ANY.finditer(text or ""):
+        d = parse_date(mm.group(0))
+        if d:
+            cands.append(d)
+    for d in cands:   # 按出现顺序，第一个与网址同月（或前一个月）的就是发布日期
+        y, mo = int(d[:4]), int(d[5:7])
+        if (y * 12 + mo) in (uy * 12 + um, uy * 12 + um - 1):
+            return d, False
+    return f"{uy:04d}-{um:02d}-01", True
 
 
 def build_item(url, art):
@@ -76,6 +95,8 @@ def build_item(url, art):
     stds = find_standards(art["title"] + " " + kw)
     it["standards"] = stds
     it["title_en"] = art["title"]
+    if art.get("date_guess"):
+        it["date_guess"] = True
     return it
 
 
