@@ -2,8 +2,8 @@
 
 本地运行：  cd scraper && python fetch.py
 环境变量：
-  ANTHROPIC_API_KEY   设置了就用 Claude 生成摘要
-  GITHUB_TOKEN        没有 Claude 密钥时，用 GitHub Models 免费生成（Actions 里自动提供）
+  GEMINI_API_KEY      设置了就用 Gemini 免费额度生成摘要
+  ANTHROPIC_API_KEY   设置了（且没有 Gemini 密钥）就用 Claude（付费）
   两个都没有就只抓取、不生成摘要
   MAX_AI              每次最多生成多少条摘要（控制费用），默认 80
 """
@@ -114,10 +114,13 @@ def main():
 
     # ---------- 修正只能猜测日期的 IFRS 条目 ----------
     fixed = 0
-    for it in [x for x in items.values() if x["source"] == "ifrs" and x.get("date_guess")][:80]:
+    need = [x for x in items.values() if x["source"] == "ifrs" and (
+        x.get("date_guess") or (x.get("date", "").endswith("-01") and not x.get("date_checked")))]
+    for it in need[:80]:
         try:
             art = ifrs.parse_article(ifrs.get(it["url"]), it["url"])
             it["date"] = art["date"]
+            it["date_checked"] = True
             if not art.get("date_guess"):
                 it.pop("date_guess", None)
                 fixed += 1

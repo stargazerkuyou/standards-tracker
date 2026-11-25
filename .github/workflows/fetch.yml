@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  models: read        # 允许用 GitHub Models 免费生成 AI 摘要
 
 concurrency:
   group: fetch
@@ -40,8 +39,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_MODEL: ${{ vars.GITHUB_MODEL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           MAX_AI: ${{ github.event.inputs.max_ai || '40' }}
         run: python scraper/fetch.py
 

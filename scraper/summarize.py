@@ -1,20 +1,21 @@
 """给每条动态生成中文摘要。每条只生成一次，结果存进 data.json。
 
 两种 AI 来源，自动选择：
-1. 设置了 ANTHROPIC_API_KEY → 用 Claude（付费，质量更好；可选 ANTHROPIC_MODEL）
-2. 否则用 GitHub Models（免费，有每日次数限制；在 Actions 里用自带的 GITHUB_TOKEN，无需任何密钥；
-   可在仓库 Variables 里设 GITHUB_MODEL 换模型）
+1. 设置了 GEMINI_API_KEY → 用谷歌 Gemini 免费额度（aistudio.google.com 申请，不绑卡不扣费，每天有次数限制）
+   模型自动挑当前可用的 Flash 系列；也可在仓库 Variables 里设 GEMINI_MODEL 指定
+2. 设置了 ANTHROPIC_API_KEY → 用 Claude（付费；可选 ANTHROPIC_MODEL）
 """
 import json
 import os
 import re
+import time
 
 import requests
 
 API = "https://api.anthropic.com/v1/messages"
 MODEL = os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5"
-GH_API = "https://models.github.ai/inference/chat/completions"
-GH_MODEL = os.environ.get("GITHUB_MODEL") or "openai/gpt-4.1-mini"
+GEM_BASE = "https://generativelanguage.googleapis.com/v1beta/"
+_gem_model = [os.environ.get("GEMINI_MODEL") or None]
 
 
 class RateLimited(Exception):
@@ -22,11 +23,36 @@ class RateLimited(Exception):
 
 
 def backend():
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic"
-    if os.environ.get("GITHUB_TOKEN"):
-        return "github"
     return None
+
+
+def gemini_model():
+    """谷歌经常更换模型名，所以每次运行先查一下当前账号能用哪些，挑 Flash 系列。"""
+    if _gem_model[0]:
+        return _gem_model[0]
+    r = requests.get(GEM_BASE + "models", params={"pageSize": 200},
+                     headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]}, timeout=30)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Gemini 查询模型失败 HTTP {r.status_code}: {r.text[:300]}")
+    names = [m["name"].split("/", 1)[1] for m in r.json().get("models", [])
+             if "generateContent" in m.get("supportedGenerationMethods", [])]
+    bad = ("image", "tts", "audio", "live", "embed", "vision", "exp", "learnlm", "thinking")
+    ok = [n for n in names if "flash" in n and not any(b in n for b in bad)]
+    for want in ("gemini-flash-lite-latest", "gemini-flash-latest"):
+        if want in ok:
+            _gem_model[0] = want
+            return want
+    stable = [n for n in ok if "preview" not in n] or ok
+    if not stable:
+        raise RuntimeError("Gemini 没有可用的 Flash 模型：" + ", ".join(names[:15]))
+    # 版本号大的优先，lite（免费次数更多）优先
+    stable.sort(key=lambda n: (("lite" in n), [int(x) for x in re.findall(r"\d+", n)[:2]]), reverse=True)
+    _gem_model[0] = stable[0]
+    return stable[0]
 TYPES = ["准则发布", "解释", "征求意见", "解读指引", "会议决定", "动态"]
 
 SYSTEM = """你是一名资深会计准则研究员，帮一位在企业做财务实务工作的中国会计人员快速判断准则动态。
@@ -66,11 +92,33 @@ def summarize(item, text):
     if not be:
         return None
     source = {"mof": "财政部会计司", "ifrs": "IFRS 基金会（IASB/ISSB）"}.get(item["source"], item["source"])
-    limit = 9000 if be == "anthropic" else 4500   # 免费模型单次输入有长度限制
+    limit = 9000
     prompt = PROMPT.format(source=source, section=item.get("section") or "", title=item["title"],
                            date=item.get("date") or "", url=item["url"], types="/".join(TYPES),
                            text=(text or "")[:limit])
-    if be == "anthropic":
+    if be == "gemini":
+        model = gemini_model()
+        body = {"systemInstruction": {"parts": [{"text": SYSTEM}]},
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096,
+                                     "responseMimeType": "application/json"}}
+        for attempt in range(2):
+            r = requests.post(f"{GEM_BASE}models/{model}:generateContent", timeout=120, json=body,
+                              headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+            if r.status_code == 429 and attempt == 0:
+                time.sleep(65)       # 每分钟次数限制：等一分钟再试一次
+                continue
+            break
+        if r.status_code == 429:
+            raise RateLimited("Gemini 今日免费额度已用完")
+        if r.status_code >= 400:
+            raise RuntimeError(f"Gemini HTTP {r.status_code}: {r.text[:300]}")
+        cands = r.json().get("candidates") or []
+        if not cands:
+            raise RuntimeError("Gemini 没有返回内容：" + r.text[:200])
+        out = "".join(p.get("text", "") for p in cands[0].get("content", {}).get("parts", []) if not p.get("thought"))
+        time.sleep(5)                # 免费版每分钟次数有限，放慢一点
+    else:
         r = requests.post(API, timeout=120, headers={
             "x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01",
             "content-type": "application/json"},
@@ -82,17 +130,6 @@ def summarize(item, text):
             raise RuntimeError(f"Claude API HTTP {r.status_code}: {r.text[:300]}")
         out = "".join(b.get("text", "") for b in r.json().get("content", []))
         model = MODEL
-    else:
-        r = requests.post(GH_API, timeout=120, headers={
-            "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json"},
-            json={"model": GH_MODEL, "max_tokens": 1200, "temperature": 0.2,
-                  "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]})
-        if r.status_code == 429:
-            raise RateLimited("GitHub Models 今日免费额度已用完")
-        if r.status_code >= 400:
-            raise RuntimeError(f"GitHub Models HTTP {r.status_code}: {r.text[:300]}")
-        out = r.json()["choices"][0]["message"]["content"]
-        model = GH_MODEL
     data = parse_json(out)
     data["model"] = model
     return data

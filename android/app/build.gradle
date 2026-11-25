@@ -3,6 +3,9 @@ plugins {
 }
 
 def vc = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+// 签名钥匙和密码放在仓库里（个人自用），保证每次打包签名一致，手机上能直接覆盖升级
+def ks = new Properties()
+ks.load(new FileInputStream(rootProject.file('keystore.properties')))
 
 android {
     namespace 'com.zevarl.zhunze'
@@ -19,9 +22,9 @@ android {
     signingConfigs {
         release {
             storeFile file('release.keystore')
-            storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
-            keyAlias 'zhunze'
-            keyPassword System.getenv('KEYSTORE_PASSWORD') ?: ''
+            storePassword ks['storePassword']
+            keyAlias ks['keyAlias']
+            keyPassword ks['storePassword']
         }
     }
 

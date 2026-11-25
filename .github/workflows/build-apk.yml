@@ -31,41 +31,16 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp app/index.html android/app/src/main/assets/index.html
 
-      - name: 准备签名（每次用同一把钥匙签名，手机上才能覆盖安装）
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            # 去掉复制粘贴时可能混进来的空格、换行
-            printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > android/app/release.keystore 2>/dev/null \
-              || { echo "::error::ANDROID_KEYSTORE_B64 解码失败：复制时可能漏了字符，请重新复制那一整行再填一次"; exit 1; }
-            if ! keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-              echo "::error::签名钥匙打不开：ANDROID_KEYSTORE_PASSWORD 不对，或 ANDROID_KEYSTORE_B64 不完整。请对照『签名钥匙-勿上传.txt』重新填这两个"
-              exit 1
-            fi
-            echo "SIGN=1" >> $GITHUB_ENV
-          else
-            echo "::warning::没有配置 ANDROID_KEYSTORE_B64，这次用临时调试签名；以后换成正式签名时，需要先卸载旧版再安装"
-          fi
-
-      - name: 打包
+      - name: 打包（签名钥匙在 android/app/release.keystore）
         working-directory: android
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          if [ "$SIGN" = "1" ]; then
-            if ! gradle assembleRelease -PversionCode=${{ github.run_number }} --no-daemon > build.log 2>&1; then
-              tail -60 build.log
-              echo "::error::打包失败：$(grep -E 'error:|What went wrong|Exception|^> ' build.log | head -8 | tr '\n' ' ' | cut -c1-900)"
-              exit 1
-            fi
-            tail -5 build.log
-            cp app/build/outputs/apk/release/app-release.apk ../zhunze-${{ github.run_number }}.apk
-          else
-            gradle assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
-            cp app/build/outputs/apk/debug/app-debug.apk ../zhunze-${{ github.run_number }}.apk
+          if ! gradle assembleRelease -PversionCode=${{ github.run_number }} --no-daemon > build.log 2>&1; then
+            tail -60 build.log
+            echo "::error::打包失败：$(grep -E 'error:|What went wrong|Exception|^> ' build.log | head -8 | tr '\n' ' ' | cut -c1-900)"
+            exit 1
           fi
+          tail -5 build.log
+          cp app/build/outputs/apk/release/app-release.apk ../zhunze-${{ github.run_number }}.apk
 
       - name: 发布到 Releases
         uses: softprops/action-gh-release@v2
