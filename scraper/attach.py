@@ -75,13 +75,29 @@ def clean(text):
 
 
 HEAD_RE = re.compile(r"^\s*(?:([一二三四五六七八九十]{1,3})、|第[一二三四五六七八九十]{1,3}[章条节部分]\s*|(\d{1,2})\s*[-－]\s*(\d{1,2})\s*(?=[\u4e00-\u9fff]))(.{3,60})$")
-BODY_START = re.compile(r"(该问题|本解释|本指引|根据|按照|依据|企业应|对于|在实务中|实务中|《企业会计准则|\(以下|（以下)")
-OPEN_END = re.compile(r"[的与和及、对就在于（(《“]$")
+BODY_START = re.compile(r"(该问题|本解释|本指引|根据|按照|依据|企业应|在实务中|实务中|《企业会计准则|\(以下|（以下)")
+# 标题通常以这些词结尾；不是的话，多半是被 PDF 换行截断了，要接上下一行
+COMPLETE_END = re.compile(r"(处理|列报|披露|确认|计量|判断|分类|条件|日期|问题|规定|要求|内容|背景|计划|类|方法|范围|"
+                          r"定义|原则|安排|衔接|施行|核算|关系|影响|担保|保险|损益|费用|收入|补偿|补贴|事项|情形|认定)$")
+LEADER = re.compile(r"[.．…·。\-－_]{3,}.*$")      # 目录里的“……2”页码
 
 
-def headings(text, limit=8):
-    """附件里的一级标题，作为“要点”。例如“一、关于……的会计处理”、“5-1 ……”。"""
-    out = []
+def _num_key(m):
+    if m.group(2):
+        return (int(m.group(2)), int(m.group(3)))
+    cn = "一二三四五六七八九十"
+    g = m.group(1)
+    if g:
+        v = 10 + (cn.index(g[-1]) + 1 if len(g) > 1 else 0) if g[0] == "十" else cn.index(g[0]) + 1
+        return (0, v)
+    return None
+
+
+def headings(text, limit=10):
+    """附件里的一级标题，作为“要点”。例如“一、关于……的会计处理”、“5-1 ……”。
+    同一个编号出现多次（目录一遍、正文一遍）时，保留最完整的那个。"""
+    found = {}          # 编号 -> 标题
+    order = []
     seen_one = False
     lines = (text or "").splitlines()
     for i, line in enumerate(lines):
@@ -93,21 +109,24 @@ def headings(text, limit=8):
             if seen_one:                       # 编号重新从“一、”开始：已经进入下一级内容，停
                 break
             seen_one = True
-        h = line
-        # 标题被 PDF 拆成两行：只有上一行明显没说完（以“的、与、和……”结尾）才接下一行
-        if OPEN_END.search(h) and i + 1 < len(lines):
-            nxt = lines[i + 1].strip()
-            if nxt and len(nxt) < 40 and not HEAD_RE.match(nxt):
+        h = LEADER.sub("", re.sub(r"\s+", "", line))
+        if not COMPLETE_END.search(h) and i + 1 < len(lines):
+            nxt = LEADER.sub("", re.sub(r"\s+", "", lines[i + 1]))
+            if nxt and len(nxt) < 40 and not HEAD_RE.match(lines[i + 1].strip()) and not BODY_START.match(nxt):
                 h += nxt
-        h = re.sub(r"\s+", "", h)
         cut = BODY_START.search(h, 6)          # 标题后面粘上了正文，截掉
         if cut:
             h = h[:cut.start()]
-        h = h.rstrip("，,。；;：:")
+        h = LEADER.sub("", h).rstrip("，,。；;：:0123456789-－ ")
         if len(h) < 5 or re.search(r"附件|联系人|电话|\d{4,}", h):
             continue
-        if h not in out:
-            out.append(h[:60])
-        if len(out) >= limit:
-            break
-    return out
+        key = _num_key(m) or h
+        if key not in found:
+            order.append(key)
+            found[key] = h[:60]
+        elif len(h) > len(found[key]) and COMPLETE_END.search(h):
+            found[key] = h[:60]
+    if any(isinstance(k, tuple) and k[0] > 0 for k in order):     # 有“5-1”这种编号时，“一、”是下一级小标题，不要
+        order = [k for k in order if isinstance(k, tuple) and k[0] > 0]
+    keys = sorted(order, key=lambda k: k if isinstance(k, tuple) else (99, 0)) if all(isinstance(k, tuple) for k in order) else order
+    return [found[k] for k in keys][:limit]

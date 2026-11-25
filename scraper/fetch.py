@@ -94,7 +94,7 @@ def main():
                     d = auto.extract_dates(att_text)
                     if it.get("type") in ("准则发布", "解释"):
                         new["effective_date"] = d["effective_date"]
-            new["v"] = 7
+            new["v"] = 8
             it["auto"] = new
         except Exception as e:  # noqa: BLE001
             print("  自动摘要失败", it["url"], e)
@@ -202,7 +202,7 @@ def main():
         print(f"修正了 {fixed} 条 IFRS 日期")
 
     # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
-    AUTO_VER = 7   # 规则改了就加 1，已有条目会重新提取一次
+    AUTO_VER = 8   # 规则改了就加 1，已有条目会重新提取一次
     need = [x for x in items.values() if x["id"] not in texts and (
         "auto" not in x or (x["source"] != "ifrs" and (x.get("auto") or {}).get("v", 1) < AUTO_VER)
         or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh"))
