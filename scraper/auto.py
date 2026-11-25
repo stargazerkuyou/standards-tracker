@@ -118,7 +118,8 @@ def extract_dates(text):
     return out
 
 
-SKIP_LINE = re.compile(r"^(各|国务院|有关|财政部各地|新疆|附件|联\s*系|电\s*话|电子邮箱|通讯地址|地\s*址|邮\s*编)|[：:]$")
+SKIP_LINE = re.compile(r"^(各|国务院|有关|财政部各地|新疆|附件|联\s*系|电\s*话|电子邮箱|通讯地址|地\s*址|邮\s*编|来源|作者|发布时间|字号)"
+                       r"|^20\d{2}年\d{1,2}月\d{1,2}日.{0,30}来源|[：:]$")
 
 
 def mof_summary(text):
@@ -135,17 +136,20 @@ def mof_summary(text):
 
 
 def ifrs_lead(text):
-    paras = [p.strip() for p in (text or "").splitlines() if len(p.strip()) > 60]
+    paras = [p.strip() for p in (text or "").splitlines() if len(p.strip()) > 50]
     paras = [p for p in paras if not re.match(r"^\d{1,2}\s+\w+\s+20\d{2}$", p)]
     lead = " ".join(paras[:2])
     return lead[:700]
 
 
-def build(item, text):
+def build(item, text, keep_title=None):
     dates = extract_dates(text)
-    auto = {"comment_deadline": dates["comment_deadline"], "effective_date": dates["effective_date"]}
+    # 新闻、解读里提到的施行日期多半是别的法规的，放进日程会很乱，所以只给这几类
+    eff = dates["effective_date"] if item.get("type") in ("准则发布", "解释", "征求意见") else None
+    ddl = dates["comment_deadline"] if item.get("type") in ("征求意见", "动态", "会议决定", "解读指引") or "意见" in item["title"] else None
+    auto = {"comment_deadline": ddl, "effective_date": eff}
     if item["source"] == "ifrs":
-        auto["title_zh"] = translate(item.get("title_en") or item["title"])
+        auto["title_zh"] = keep_title or translate(item.get("title_en") or item["title"])
         lead = ifrs_lead(text)
         auto["summary"] = translate(lead) if lead else None
         auto["translated_by"] = status["engine"] if auto["title_zh"] else None

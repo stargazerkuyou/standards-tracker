@@ -61,7 +61,10 @@ def main():
 
     def do_auto(it, text):
         try:
-            it["auto"] = auto.build(it, text)
+            old = it.get("auto") or {}
+            new = auto.build(it, text, keep_title=old.get("title_zh"))
+            new["v"] = 2
+            it["auto"] = new
         except Exception as e:  # noqa: BLE001
             print("  自动摘要失败", it["url"], e)
 
@@ -143,8 +146,11 @@ def main():
         print(f"修正了 {fixed} 条 IFRS 日期")
 
     # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
+    AUTO_VER = 2   # 规则改了就加 1，已有条目会重新提取一次
     need = [x for x in items.values() if x["id"] not in texts and (
-        "auto" not in x or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh")))]
+        "auto" not in x or (x.get("auto") or {}).get("v", 1) < AUTO_VER
+        or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh"))
+        or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("summary")))]
     need.sort(key=lambda x: x.get("date") or "", reverse=True)
     for it in need[:150]:
         try:

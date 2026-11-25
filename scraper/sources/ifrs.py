@@ -11,6 +11,8 @@ from bs4 import BeautifulSoup
 from common import get, new_item, parse_date, guess_framework, guess_type, find_standards
 
 SITEMAP = "https://www.ifrs.org/sitemap.xml"
+BOILER = re.compile(r"cookie|skip to|sign in|log in|register|subscribe|follow us|copyright|all rights reserved|"
+                    r"privacy|terms of use|share this|javascript|your browser", re.I)
 NEWS_RE = re.compile(r"https://www\.ifrs\.org/news-and-events/news/(20\d{2})/(\d{2})/[^<\s]+?/?(?=<|\s|$)")
 
 
@@ -49,9 +51,21 @@ def parse_article(html, url):
     soup_text = soup.get_text(" ", strip=True)
     for t in soup(["script", "style", "nav", "header", "footer", "noscript"]):
         t.decompose()
+    def collect(root):
+        out = []
+        for el in root.find_all(["p", "li", "h2", "h3", "blockquote"]):
+            t = el.get_text(" ", strip=True)
+            if len(t) > 30 and not BOILER.search(t) and t not in out:
+                out.append(t)
+        return out
+
     main = soup.find("main") or soup.find("article") or soup.body or soup
-    paras = [p.get_text(" ", strip=True) for p in main.find_all(["p", "li", "h2", "h3"])]
-    paras = [p for p in paras if len(p) > 30 and "cookie" not in p.lower()]
+    paras = collect(main)
+    if sum(len(p) for p in paras) < 300 and soup.body:      # 正文不在 <main> 里时，扩大到整页
+        paras = collect(soup.body)
+    desc = meta("og:description", "description")
+    if desc and len(desc) > 60 and desc not in paras:
+        paras.insert(0, desc)
     text = "\n".join(paras)
 
     d, guessed = find_date(soup_text, url, meta("article:published_time", "date", "publishdate", "dc.date"))
