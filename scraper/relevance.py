@@ -20,7 +20,7 @@ MOF_DROP = re.compile(
     r"内部控制")
 MOF_KEEP = re.compile(
     r"企业会计准则|会计准则|准则解释|解释第|应用指南|实施问答|案例|会计处理|暂行规定|会计科目|"
-    r"可持续披露|国际财务报告准则|国际会计准则理事会|国际可持续准则理事会|"
+    r"实施问答|应用案例|可持续披露|国际财务报告准则|国际会计准则理事会|国际可持续准则理事会|"
     r"实施情况分析报告|年报工作|会计信息质量|会计监管|"
     r"XBRL|扩展分类|通用分类标准")
 
@@ -45,6 +45,8 @@ UPDATE = re.compile(r"\bupdate\b", re.I)
 def keep(item):
     src = item.get("source")
     if src == "mof":
+        if item.get("section") in ("实施问答", "应用案例"):     # 企业会计准则实施专题，全部要
+            return True
         t = item.get("title", "")
         if MOF_DROP.search(t):
             return False
@@ -77,6 +79,8 @@ def classify(item):
             return "会议决定"
         return "动态"
     if item.get("source") == "mof":
+        if item.get("section") in ("实施问答", "应用案例"):
+            return "解读指引"
         if "征求意见" in t or "意见征询" in t:
             return "征求意见"
         if "解释第" in t:

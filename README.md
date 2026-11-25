@@ -14,7 +14,7 @@ GitHub Actions（每天北京时间 7:17）
 
 | 路径 | 作用 |
 |---|---|
-| `scraper/` | 抓取脚本（Python）。`sources/mof.py` 财政部，`sources/ifrs.py` IFRS，`sources/csrc.py` 证监会会计监管，`auto.py` 机器翻译和规则提取，`summarize.py` AI 摘要（可选） |
+| `scraper/` | 抓取脚本（Python）。`sources/mof.py` 财政部（含企业会计准则实施问答、应用案例），`sources/szse.py` 深交所《会计监管动态》，`sources/ifrs.py` IFRS，`sources/csrc.py` 证监会会计监管，`auto.py` 机器翻译和规则提取，`summarize.py` AI 摘要（可选） |
 | `data/` | 自动生成的数据，不要手改 |
 | `app/index.html` | App 界面（单文件 HTML），电脑浏览器也能直接打开看 |
 | `android/` | 安卓外壳（WebView），由 GitHub 自动打包。签名钥匙也在这里（个人自用，只从自己仓库的 Releases 下载安装） |

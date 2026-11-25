@@ -18,6 +18,8 @@ SECTIONS = {
     "zhengcejiedu": "政策解读",
     "guojidongtai": "国际动态",
     "gongzuodongtai": "工作动态",
+    "zt/kjzzss/sswd": "实施问答",      # 企业会计准则实施专题：各准则的实施问答
+    "zt/kjzzss/srzzzq": "应用案例",    # 企业会计准则实施专题：应用案例
 }
 ARTICLE_RE = re.compile(r"/(\d{6})/t(\d{8})_\d+\.html?$")
 ATTACH_RE = re.compile(r"\.(pdf|docx?|xlsx?|wps|ofd|zip|rar)$", re.I)
@@ -35,7 +37,8 @@ def parse_list(html, page_url, section_name):
         if not m or href in seen:
             continue
         title = (a.get("title") or a.get_text(" ", strip=True) or "").strip()
-        if len(title) < 6 or any(w in title for w in SKIP_WORDS):
+        title = re.sub(r"^\s*问[：:]\s*", "", title)
+        if len(title) < 6 or any(w in title for w in SKIP_WORDS) or title in ("更多", "更多>>", "更多> >"):
             continue
         seen.add(href)
         # 列表里显示的日期通常在同一个 <li>/<tr> 里

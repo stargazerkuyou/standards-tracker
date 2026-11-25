@@ -136,6 +136,10 @@ def main():
                 text, att = mof.fetch_detail(it)
                 it["attachments"] = att
                 texts[it["id"]] = text
+                if it.get("section") in ("实施问答", "应用案例") and (it["title"].endswith(("…", "...")) or len(it["title"]) < 12):
+                    m = re.search(r"问[：:]\s*(.{8,200}?[？?])", text or "")
+                    if m:
+                        it["title"] = m.group(1)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"详情 {it['url']}: {e}")
                 texts[it["id"]] = ""

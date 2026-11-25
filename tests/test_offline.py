@@ -81,6 +81,10 @@ def test_parsers():
     check(items[0]["date"] == "2026-11-11", f"用列表显示日期而不是链接日期：{items[0]['date']}")
     import relevance
     check([relevance.keep(i) for i in items] == [True, False, True], "相关性：准则留下、规划去掉")
+    qa = mof.parse_list("""<ul><li><a href="./gdzczzsswd/202504/t20250417_3962201.htm" title="问：甲公司已将研发样机支出费用化，此后销售样机时能否冲回研发费用？">问：甲公司已将研发样机支出费用化……</a><span>2025-04-17</span></li>
+      <li><a href="./gdzczzsswd/">更多> ></a></li></ul>""", "http://kjs.mof.gov.cn/zt/kjzzss/sswd/", "实施问答")
+    check(len(qa) == 1 and qa[0]["title"].startswith("甲公司已将研发样机") and relevance.keep(qa[0]) and relevance.classify(qa[0]) == "解读指引",
+          f"实施问答：{[(q['title'], q['section']) for q in qa]}")
     check(items[0]["url"] == "http://kjs.mof.gov.cn/zhengcefabu/202611/t20261105_4004148.htm", "相对链接补全")
     check(items[2]["type"] == "征求意见", f"征求意见函分类：{items[2]['type']}")
     check("CAS 解释22" in items[2]["standards"], f"识别解释编号：{items[2]['standards']}")
