@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>准则追踪</title>
+<style>
+:root{
+  --ink:#1b2a41; --text:#1f2329; --sub:#646a73; --faint:#8f959e; --line:#e8eaed;
+  --bg:#f4f5f7; --card:#fff; --accent:#1b2a41; --red:#e5484d;
+  --cn:#c2410c; --ifrs:#1d4ed8; --esg:#15803d; --aud:#7c3aed;
+  --hi:#e5484d; --mid:#d97706; --lo:#9ca3af;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:15px/1.55 -apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+a{color:var(--ifrs)}
+.app{display:flex;flex-direction:column;height:100%;max-width:760px;margin:0 auto;background:var(--bg)}
+header.top{background:var(--ink);color:#fff;padding:12px 16px 10px;flex:none}
+.top-row{display:flex;align-items:center;gap:10px}
+.top h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.5px;flex:1}
+.top .upd{font-size:12px;opacity:.7}
+.icon-btn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center}
+.icon-btn:active{background:rgba(255,255,255,.12)}
+.icon-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+.spin svg{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.search{margin-top:10px;display:flex;align-items:center;background:rgba(255,255,255,.12);border-radius:8px;padding:0 10px}
+.search input{flex:1;background:none;border:0;outline:0;color:#fff;padding:8px 6px;font-size:14px}
+.search input::placeholder{color:rgba(255,255,255,.55)}
+.search svg{width:16px;height:16px;stroke:rgba(255,255,255,.6);fill:none;stroke-width:2}
+
+.filters{background:#fff;border-bottom:1px solid var(--line);flex:none}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips+.chips{padding-top:0}
+.chip{flex:none;padding:4px 11px;border-radius:999px;background:#f1f2f4;color:var(--sub);font-size:13px;white-space:nowrap}
+.chip.on{background:var(--ink);color:#fff}
+.chip .n{opacity:.6;margin-left:3px;font-size:12px}
+.chip.toggle.on{background:#fff1f0;color:var(--red);box-shadow:inset 0 0 0 1px #fbc5c3}
+
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 90px}
+.banner{background:#fff7e6;color:#8a5300;border:1px solid #ffe1a8;border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:10px}
+.banner.err{background:#fff1f0;color:#a8071a;border-color:#ffccc7}
+.empty{text-align:center;color:var(--faint);padding:60px 20px;font-size:14px}
+.group-h{font-size:12px;color:var(--faint);margin:14px 4px 6px;font-weight:600}
+
+.card{background:var(--card);border-radius:12px;padding:12px 14px 12px 16px;margin-bottom:8px;position:relative;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card:active{background:#fafafa}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--fw)}
+.card.read .ttl{color:var(--sub);font-weight:500}
+.meta{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);flex-wrap:wrap}
+.fw{color:var(--fw);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block}
+.imp{font-size:11px;padding:0 6px;border-radius:4px;line-height:18px;font-weight:600}
+.imp.高{background:#fff1f0;color:var(--hi)} .imp.中{background:#fff7e6;color:var(--mid)} .imp.低{background:#f3f4f6;color:var(--lo)}
+.ttl{font-size:15.5px;font-weight:620;margin:4px 0 2px;line-height:1.45}
+.en{font-size:12px;color:var(--faint);margin-bottom:2px}
+.sum{font-size:13.5px;color:var(--sub);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:11.5px;padding:1px 7px;border-radius:4px;background:#f1f3f7;color:#4b5563}
+.tag.due{background:#eef4ff;color:var(--ifrs)}
+.star{color:#f59e0b}
+
+nav.tabs{position:fixed;bottom:0;left:0;right:0;max-width:760px;margin:0 auto;background:#fff;border-top:1px solid var(--line);
+  display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.tabs button{flex:1;padding:7px 0 6px;font-size:11px;color:var(--faint);display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
+nav.tabs button.on{color:var(--ink);font-weight:600}
+nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+nav.tabs .badge{position:absolute;top:3px;left:calc(50% + 6px);background:var(--red);color:#fff;font-size:10px;border-radius:9px;padding:0 5px;line-height:16px;min-width:16px}
+
+/* 详情 */
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:10;display:flex;flex-direction:column;max-width:760px;margin:0 auto;
+  transform:translateX(100%);transition:transform .22s ease}
+.sheet.open{transform:none}
+.sheet header{background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:8px 8px;gap:4px;flex:none}
+.sheet header .icon-btn{color:var(--ink)}
+.sheet header .icon-btn:active{background:#f1f2f4}
+.sheet header .grow{flex:1}
+.sheet .body{flex:1;overflow-y:auto;padding:16px 16px 40px}
+.d-title{font-size:19px;font-weight:680;line-height:1.45;margin:6px 0 4px}
+.d-en{font-size:13px;color:var(--faint);margin-bottom:8px}
+.sec{background:#fff;border-radius:12px;padding:12px 14px;margin-top:12px}
+.sec h3{font-size:13px;color:var(--faint);margin:0 0 6px;font-weight:600}
+.sec p{margin:0}
+.sec ul{margin:0;padding-left:18px}.sec li{margin:3px 0}
+.kv{margin:0;display:grid;grid-template-columns:88px 1fr;gap:6px 10px;font-size:14px}
+.kv dt{color:var(--faint)} .kv dd{margin:0}
+table.map{width:100%;border-collapse:collapse;font-size:13.5px}
+table.map th{text-align:left;color:var(--faint);font-weight:600;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)}
+table.map td{padding:6px 0;border-bottom:1px solid #f3f4f6;vertical-align:top;width:50%}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:9px;background:var(--ink);color:#fff;font-weight:600;font-size:14px}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1px #d0d4da}
+.btn-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+textarea.note{width:100%;min-height:96px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;outline:0;background:#fcfcfd}
+textarea.note:focus{border-color:#9aa4b2}
+.hint{font-size:12px;color:var(--faint);margin-top:4px}
+.ai-note{font-size:11.5px;color:var(--faint);margin-top:8px}
+
+/* 设置 */
+.form label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+.form input,.form select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;outline:0}
+.src{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:14px}
+.src:last-child{border:0}
+.src .s{width:8px;height:8px;border-radius:50%}
+.src .t{flex:1}.src .w{font-size:12px;color:var(--faint)}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:rgba(27,42,65,.94);color:#fff;padding:8px 16px;border-radius:8px;font-size:13.5px;
+  z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:86%;text-align:center}
+.toast.show{opacity:1}
+.cal-date{font-weight:700;color:var(--ink);font-size:14px;min-width:84px}
+.cal-row{display:flex;gap:10px;align-items:flex-start}
+.cal-kind{font-size:11.5px;font-weight:600;padding:0 6px;border-radius:4px;line-height:18px}
+.cal-kind.eff{background:#eef4ff;color:var(--ifrs)} .cal-kind.ddl{background:#fff1f0;color:var(--hi)}
+.left{font-size:12px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-row">
+      <h1 id="title">准则追踪</h1>
+      <span class="upd" id="upd"></span>
+      <button class="icon-btn" id="refreshBtn" title="刷新"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+    </div>
+    <div class="search" id="searchBox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="搜索标题、摘要、准则编号（如 IFRS 16、租赁）"></div>
+  </header>
+  <div class="filters" id="filters"></div>
+  <main id="main"></main>
+  <nav class="tabs" id="tabs"></nav>
+</div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 配置与状态 ================= */
+const DEFAULT_DATA_BASE = 'https://raw.githubusercontent.com/stargazerkuyou/standards-tracker/main/data/';
+const DEFAULT_DAV_FILE = 'https://dav.jianguoyun.com/dav/我的坚果云/准则追踪.json';
+const FW = {'中国准则':'--cn','IFRS':'--ifrs','可持续':'--esg','审计监管':'--aud'};
+const FW_LIST = ['全部','中国准则','IFRS','可持续','审计监管'];
+const TYPE_LIST = ['全部','准则发布','解释','征求意见','解读指引','会议决定','动态'];
+const SRC_NAME = {mof:'财政部会计司', ifrs:'IFRS 基金会'};
+
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.log('存储失败', e); } }
+};
+const cfg = Object.assign({dataBase:DEFAULT_DATA_BASE, davFile:DEFAULT_DAV_FILE, davUser:'', davPass:'', hideLow:true}, LS.get('zz_cfg', {}));
+// 用户状态：已读 / 收藏 / 笔记，均带时间戳，便于和坚果云合并
+const st = Object.assign({read:{}, star:{}, notes:{}, baseline:null, lastSync:null}, LS.get('zz_state', {}));
+let data = LS.get('zz_data', null);
+let dataVer = LS.get('zz_ver', null);
+const ui = {tab:'feed', fw:'全部', type:'全部', unread:false, q:'', openId:null};
+
+function saveState(){ LS.set('zz_state', st); scheduleSync(); }
+function saveCfg(){ LS.set('zz_cfg', cfg); }
+
+/* ================= 网络：安卓走原生，电脑浏览器走 fetch ================= */
+const pending = {};
+let reqSeq = 0;
+window.__nativeCb = (id, status, text) => { const p = pending[id]; if(p){ delete pending[id]; p({status, text}); } };
+function http(method, url, headers = {}, body = ''){
+  if (window.Native && window.Native.http){
+    return new Promise(res => { const id = 'r' + (++reqSeq); pending[id] = res;
+      window.Native.http(id, method, url, JSON.stringify(headers), body || ''); });
+  }
+  return fetch(url, {method, headers, body: method === 'GET' ? undefined : body, cache:'no-store'})
+    .then(async r => ({status:r.status, text: await r.text()}))
+    .catch(e => ({status:0, text:String(e)}));
+}
+function openUrl(u){ if(window.Native && window.Native.openUrl) window.Native.openUrl(u); else window.open(u, '_blank'); }
+
+/* ================= 工具 ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, ms = 2200){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms); }
+const today = () => new Date().toISOString().slice(0,10);
+function isoFrom(text){
+  if(!text) return null;
+  let m = String(text).match(/(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  return null;
+}
+function daysLeft(iso){ return Math.round((new Date(iso + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5); }
+function relTime(isoTs){
+  if(!isoTs) return '';
+  const d = (Date.now() - new Date(isoTs)) / 1000;
+  if(d < 3600) return Math.max(1, Math.round(d/60)) + ' 分钟前';
+  if(d < 86400) return Math.round(d/3600) + ' 小时前';
+  return Math.round(d/86400) + ' 天前';
+}
+const items = () => (data && data.items) || [];
+const byId = id => items().find(x => x.id === id);
+const titleOf = it => (it.ai && it.ai.title_zh) || it.title;
+const isRead = it => !!st.read[it.id];
+const isNew = it => !isRead(it) && st.baseline && it.fetched_at > st.baseline;
+const isStar = it => !!(st.star[it.id] && st.star[it.id].on);
+const noteOf = it => (st.notes[it.id] && st.notes[it.id].text) || '';
+const imp = it => (it.ai && it.ai.importance) || '中';
+
+/* ================= 数据加载 ================= */
+let loading = false;
+async function loadData(manual){
+  if(loading) return; loading = true; $('#refreshBtn').classList.add('spin');
+  try{
+    const base = cfg.dataBase.replace(/\/?$/, '/');
+    const m = await http('GET', base + 'meta.json?t=' + Date.now());
+    if(m.status !== 200) throw new Error('读取 meta.json 失败（' + m.status + '）');
+    const meta = JSON.parse(m.text);
+    if(meta.version !== dataVer || !data){
+      const r = await http('GET', base + 'data.json?t=' + Date.now());
+      if(r.status !== 200) throw new Error('读取 data.json 失败（' + r.status + '）');
+      const nd = JSON.parse(r.text);
+      const firstTime = !data;
+      data = nd; dataVer = meta.version;
+      LS.set('zz_data', data); LS.set('zz_ver', dataVer);
+      if(firstTime && !st.baseline){ st.baseline = data.updated_at; saveState(); }
+      if(manual) toast('已更新');
+    } else if(manual) toast('已是最新');
+  }catch(e){
+    toast((data ? '更新失败，显示的是缓存：' : '加载失败：') + e.message, 3500);
+  }finally{
+    loading = false; $('#refreshBtn').classList.remove('spin'); render();
+  }
+}
+
+/* ================= 坚果云同步（只同步已读/收藏/笔记） ================= */
+function davHeaders(){ return {'Authorization':'Basic ' + btoa(unescape(encodeURIComponent(cfg.davUser + ':' + cfg.davPass)))}; }
+function encodeDav(u){ return u.replace(/[^\x00-\x7F]/g, c => encodeURIComponent(c)); }
+function mergeState(remote){
+  for(const [id, ts] of Object.entries(remote.read || {})) if(!st.read[id]) st.read[id] = ts;
+  for(const k of ['star','notes']){
+    for(const [id, v] of Object.entries(remote[k] || {})){
+      if(!st[k][id] || (v.ts || '') > (st[k][id].ts || '')) st[k][id] = v;
+    }
+  }
+  if(remote.baseline && (!st.baseline || remote.baseline < st.baseline)) st.baseline = remote.baseline;
+}
+let syncTimer = null, syncing = false;
+function scheduleSync(){ if(!cfg.davUser) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(false), 4000); }
+async function syncNow(manual){
+  if(!cfg.davUser || !cfg.davPass){ if(manual) toast('请先在设置里填写坚果云账号和应用密码'); return; }
+  if(syncing) return; syncing = true;
+  try{
+    const url = encodeDav(cfg.davFile);
+    const g = await http('GET', url, davHeaders());
+    if(g.status === 200){ try{ mergeState(JSON.parse(g.text)); }catch(e){} }
+    else if(g.status === 401) throw new Error('账号或应用密码不对');
+    else if(g.status === 0) throw new Error(window.Native ? '网络不通' : '电脑浏览器不能直连坚果云，请在手机 App 里同步');
+    else if(g.status !== 404) throw new Error('读取失败 ' + g.status);
+    const body = JSON.stringify({read:st.read, star:st.star, notes:st.notes, baseline:st.baseline, saved_at:new Date().toISOString()});
+    const p = await http('PUT', url, Object.assign({'Content-Type':'application/json; charset=utf-8'}, davHeaders()), body);
+    if(p.status >= 300) throw new Error(p.status === 409 ? '坚果云里找不到这个文件夹，请检查路径' : '保存失败 ' + p.status);
+    st.lastSync = new Date().toISOString(); LS.set('zz_state', st);
+    if(manual) toast('同步完成'); render();
+  }catch(e){ if(manual) toast('同步失败：' + e.message, 3500); }
+  finally{ syncing = false; }
+}
+
+/* ================= 筛选 ================= */
+function matchQ(it, q){
+  if(!q) return true;
+  const hay = [it.title, it.title_en, it.ai && it.ai.title_zh, it.ai && it.ai.summary, (it.standards||[]).join(' '),
+    it.ai && (it.ai.standards||[]).map(s => (s.cas||'') + ' ' + (s.ifrs||'')).join(' '), noteOf(it)].join(' ').toLowerCase();
+  return q.toLowerCase().split(/\s+/).every(w => hay.includes(w) || hay.replace(/\s/g,'').includes(w.replace(/\s/g,'')));
+}
+function feedList(){
+  return items().filter(it =>
+    (ui.fw === '全部' || it.framework === ui.fw) &&
+    (ui.type === '全部' || it.type === ui.type) &&
+    (!cfg.hideLow || imp(it) !== '低' || isStar(it) || ui.q) &&
+    (!ui.unread || !isRead(it)) && matchQ(it, ui.q))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.fetched_at || '').localeCompare(a.fetched_at || ''));
+}
+
+/* ================= 渲染 ================= */
+const ICONS = {
+  feed:'<svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>',
+  cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  star:'<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
+  set:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  back:'<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>',
+  ext:'<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+};
+
+function render(){
+  const upd = data && data.updated_at ? '数据 ' + relTime(data.updated_at) : '';
+  $('#upd').textContent = upd;
+  $('#searchBox').style.display = ui.tab === 'feed' ? '' : 'none';
+  renderTabs(); renderFilters();
+  const main = $('#main');
+  if(ui.tab === 'feed') main.innerHTML = renderFeed();
+  else if(ui.tab === 'cal') main.innerHTML = renderCal();
+  else if(ui.tab === 'star') main.innerHTML = renderStar();
+  else main.innerHTML = renderSettings();
+}
+
+function renderTabs(){
+  const newCount = items().filter(it => isNew(it) && (!cfg.hideLow || imp(it) !== '低')).length;
+  const tabs = [['feed','动态'],['cal','日程'],['star','收藏'],['set','设置']];
+  $('#tabs').innerHTML = tabs.map(([k, n]) => `<button data-tab="${k}" class="${ui.tab===k?'on':''}">${ICONS[k]}${n}
+    ${k==='feed' && newCount ? `<span class="badge">${newCount>99?'99+':newCount}</span>` : ''}</button>`).join('');
+}
+
+function renderFilters(){
+  const f = $('#filters');
+  if(ui.tab !== 'feed'){ f.innerHTML = ''; f.style.display = 'none'; return; }
+  f.style.display = '';
+  const base = items().filter(it => (!cfg.hideLow || imp(it) !== '低' || isStar(it)) && (!ui.unread || !isRead(it)) && matchQ(it, ui.q));
+  const cnt = (key, val) => val === '全部' ? base.length : base.filter(it => it[key] === val).length;
+  f.innerHTML =
+    `<div class="chips">${FW_LIST.map(v => `<button class="chip ${ui.fw===v?'on':''}" data-fw="${v}">${v}<span class="n">${cnt('framework', v)}</span></button>`).join('')}</div>
+     <div class="chips">${TYPE_LIST.map(v => `<button class="chip ${ui.type===v?'on':''}" data-type="${v}">${v === '全部' ? '全部类型' : v}</button>`).join('')}
+       <button class="chip toggle ${ui.unread?'on':''}" data-unread="1">只看未读</button></div>`;
+}
+
+function card(it){
+  const ai = it.ai || {};
+  const due = [];
+  const ddl = isoFrom(ai.comment_deadline), eff = isoFrom(ai.effective_date);
+  if(ddl && daysLeft(ddl) >= 0) due.push(`<span class="tag due">意见截止 ${ddl.slice(5)}（${daysLeft(ddl)}天）</span>`);
+  if(eff && daysLeft(eff) >= 0) due.push(`<span class="tag due">生效 ${eff}</span>`);
+  const stds = (it.standards || []).slice(0, 4).map(s => `<span class="tag">${esc(s)}</span>`).join('');
+  return `<div class="card ${isRead(it)?'read':''}" data-open="${it.id}" style="--fw:var(${FW[it.framework]||'--ifrs'})">
+    <div class="meta">${isNew(it)?'<span class="dot"></span>':''}<span class="fw">${esc(it.framework)}</span>·<span>${esc(it.type)}</span>·<span>${esc(it.date||'')}</span>
+      ${it.ai ? `<span class="imp ${imp(it)}">${imp(it)}</span>` : ''}${isStar(it)?'<span class="star">★</span>':''}${noteOf(it)?'<span>📝</span>':''}</div>
+    <div class="ttl">${esc(titleOf(it))}</div>
+    ${it.title_en && ai.title_zh ? `<div class="en">${esc(it.title_en)}</div>` : ''}
+    ${ai.summary ? `<div class="sum">${esc(ai.summary)}</div>` : ''}
+    ${(stds || due.length) ? `<div class="tags">${due.join('')}${stds}</div>` : ''}
+  </div>`;
+}
+
+function renderFeed(){
+  if(!data) return `<div class="empty">还没有数据<br><br>点右上角刷新，或在“设置”里检查数据地址</div>`;
+  let html = banners();
+  const list = feedList();
+  if(!list.length) return html + `<div class="empty">没有符合条件的动态${cfg.hideLow ? '<br>（低重要度的已隐藏，可在设置里打开）' : ''}</div>`;
+  let lastMonth = '';
+  for(const it of list.slice(0, 400)){
+    const mth = (it.date || '').slice(0, 7);
+    if(mth !== lastMonth){ html += `<div class="group-h">${mth.replace('-', ' 年 ')} 月</div>`; lastMonth = mth; }
+    html += card(it);
+  }
+  if(list.length > 400) html += `<div class="empty">只显示最近 400 条，请用搜索或筛选查看更早的</div>`;
+  return html;
+}
+
+function banners(){
+  if(!data || !data.sources) return '';
+  const bad = Object.entries(data.sources).filter(([k, s]) => {
+    if(!s.ok) return true;
+    return s.last_success && (Date.now() - new Date(s.last_success)) > 4 * 864e5;
+  });
+  if(!bad.length) return '';
+  return `<div class="banner err">${bad.map(([k, s]) => esc(SRC_NAME[k] || s.name)).join('、')} 最近抓取失败，那边的新动态可能缺失。详情见“设置 → 数据来源”。</div>`;
+}
+
+function renderCal(){
+  const rows = [];
+  for(const it of items()){
+    const ai = it.ai || {};
+    const eff = isoFrom(ai.effective_date), ddl = isoFrom(ai.comment_deadline);
+    if(eff) rows.push({d:eff, kind:'eff', it});
+    if(ddl) rows.push({d:ddl, kind:'ddl', it});
+  }
+  const up = rows.filter(r => daysLeft(r.d) >= 0).sort((a, b) => a.d.localeCompare(b.d));
+  const past = rows.filter(r => daysLeft(r.d) < 0 && daysLeft(r.d) > -120).sort((a, b) => b.d.localeCompare(a.d));
+  const row = r => `<div class="card" data-open="${r.it.id}" style="--fw:var(${FW[r.it.framework]||'--ifrs'})"><div class="cal-row">
+      <div><div class="cal-date">${r.d}</div><div class="left">${daysLeft(r.d) >= 0 ? (daysLeft(r.d) === 0 ? '今天' : '还有 ' + daysLeft(r.d) + ' 天') : Math.abs(daysLeft(r.d)) + ' 天前'}</div></div>
+      <div style="flex:1;min-width:0"><span class="cal-kind ${r.kind}">${r.kind === 'eff' ? '生效' : '意见截止'}</span>
+        <div class="ttl" style="font-size:14.5px">${esc(titleOf(r.it))}</div>
+        <div class="meta"><span class="fw">${esc(r.it.framework)}</span>·<span>${esc(r.kind === 'eff' ? r.it.ai.effective_date : r.it.ai.comment_deadline)}</span></div></div></div></div>`;
+  if(!up.length && !past.length) return `<div class="empty">暂时没有识别到生效日期或征求意见截止日期<br>（来自 AI 摘要；摘要生成后会出现在这里）</div>`;
+  return (up.length ? `<div class="group-h">即将到来</div>` + up.map(row).join('') : '<div class="empty">近期没有即将到来的日期</div>') +
+    (past.length ? `<div class="group-h">最近已过（120 天内）</div>` + past.map(row).join('') : '');
+}
+
+function renderStar(){
+  const list = items().filter(it => isStar(it) || noteOf(it));
+  if(!list.length) return `<div class="empty">在动态详情里点 ☆ 收藏，或写下“对我的影响”笔记，就会出现在这里</div>`;
+  return list.map(card).join('');
+}
+
+function renderSettings(){
+  const srcs = data && data.sources ? Object.entries(data.sources).map(([k, s]) =>
+    `<div class="src"><span class="s" style="background:${s.ok ? '#22c55e' : '#ef4444'}"></span><span class="t">${esc(s.name || k)}</span>
+      <span class="w">${s.ok ? '正常' : '失败'} · 上次成功 ${s.last_success ? relTime(s.last_success) : '无'}</span></div>
+      ${!s.ok && s.errors && s.errors.length ? `<div class="hint" style="word-break:break-all">${esc(s.errors[0].split('\n')[0])}</div>` : ''}`).join('') : '<div class="hint">尚未加载数据</div>';
+  const n = items().length, withAi = items().filter(x => x.ai).length;
+  return `<div class="sec"><h3>数据来源</h3>${srcs}
+      <div class="hint">共 ${n} 条，其中 ${withAi} 条已有 AI 摘要；数据更新于 ${data && data.updated_at ? new Date(data.updated_at).toLocaleString('zh-CN') : '—'}</div></div>
+    <div class="sec form"><h3>显示</h3>
+      <label style="display:flex;align-items:center;gap:8px;margin:4px 0"><input type="checkbox" id="hideLow" style="width:auto" ${cfg.hideLow?'checked':''}> 隐藏低重要度动态（人事、会议活动、播客等）</label>
+      <div class="btn-row"><button class="btn ghost" id="markAll">全部标为已读</button></div></div>
+    <div class="sec form"><h3>坚果云同步（已读 / 收藏 / 笔记）</h3>
+      <label>坚果云账号（邮箱）</label><input id="davUser" value="${esc(cfg.davUser)}" autocomplete="off">
+      <label>应用密码（坚果云网页版 → 账户信息 → 安全选项 → 添加应用）</label><input id="davPass" type="password" value="${esc(cfg.davPass)}">
+      <label>保存位置</label><input id="davFile" value="${esc(cfg.davFile)}">
+      <div class="hint">文件所在的文件夹必须已存在。默认放在“我的坚果云”根目录。</div>
+      <div class="btn-row"><button class="btn" id="saveDav">保存并同步</button></div>
+      <div class="hint">${st.lastSync ? '上次同步：' + relTime(st.lastSync) : '还没有同步过'}</div></div>
+    <div class="sec form"><h3>数据地址</h3>
+      <label>GitHub 数据目录（里面要有 meta.json 和 data.json）</label><input id="dataBase" value="${esc(cfg.dataBase)}">
+      <div class="btn-row"><button class="btn ghost" id="saveBase">保存并重新加载</button></div></div>
+    <div class="sec"><h3>关于</h3><p style="font-size:13.5px;color:var(--sub)">摘要由 AI 根据原文生成，可能有误。涉及具体会计处理时，请以原文为准。</p></div>`;
+}
+
+/* ================= 详情 ================= */
+function openDetail(id){
+  const it = byId(id); if(!it) return;
+  ui.openId = id;
+  if(!st.read[id]){ st.read[id] = new Date().toISOString(); saveState(); }
+  const ai = it.ai || {};
+  const kv = [];
+  if(ai.effective_date) kv.push(['生效日期', esc(ai.effective_date)]);
+  if(ai.comment_deadline) kv.push(['意见截止', esc(ai.comment_deadline) + (isoFrom(ai.comment_deadline) && daysLeft(isoFrom(ai.comment_deadline)) >= 0 ? `（还有 ${daysLeft(isoFrom(ai.comment_deadline))} 天）` : '')]);
+  if(ai.affects) kv.push(['影响范围', esc(ai.affects)]);
+  kv.push(['来源', esc((SRC_NAME[it.source] || it.source) + (it.section ? ' · ' + it.section : ''))]);
+  kv.push(['发布日期', esc(it.date || '')]);
+  const map = (ai.standards || []).filter(s => s.cas || s.ifrs);
+  $('#sheet').innerHTML = `<header><button class="icon-btn" data-close="1">${ICONS.back}</button><div class="grow"></div>
+      <button class="icon-btn" data-star="${id}" style="font-size:22px;color:${isStar(it)?'#f59e0b':'var(--ink)'}">${isStar(it)?'★':'☆'}</button>
+      <button class="icon-btn" data-ext="${esc(it.url)}">${ICONS.ext}</button></header>
+    <div class="body">
+      <div class="meta" style="--fw:var(${FW[it.framework]||'--ifrs'})"><span class="fw">${esc(it.framework)}</span>·<span>${esc(it.type)}</span>
+        ${it.ai ? `<span class="imp ${imp(it)}">重要度 ${imp(it)}</span>` : ''}</div>
+      <div class="d-title">${esc(titleOf(it))}</div>
+      ${it.title_en && ai.title_zh ? `<div class="d-en">${esc(it.title_en)}</div>` : ''}
+      ${ai.summary ? `<div class="sec"><h3>摘要</h3><p>${esc(ai.summary)}</p>${ai.importance_reason ? `<div class="hint">重要度理由：${esc(ai.importance_reason)}</div>` : ''}</div>`
+        : `<div class="sec"><h3>摘要</h3><p class="hint">AI 摘要还没生成，下次自动抓取时会补上。可以先看原文。</p></div>`}
+      ${ai.changes && ai.changes.length ? `<div class="sec"><h3>要点</h3><ul>${ai.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
+      <div class="sec"><dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>
+      ${map.length ? `<div class="sec"><h3>中外准则对照</h3><table class="map"><tr><th>中国企业会计准则</th><th>IFRS / IAS</th></tr>
+        ${map.map(s => `<tr><td>${esc(s.cas || '—')}</td><td>${esc(s.ifrs || '—')}</td></tr>`).join('')}</table></div>` : ''}
+      ${it.attachments && it.attachments.length ? `<div class="sec"><h3>附件</h3>${it.attachments.map(a => `<div style="margin:4px 0"><a href="#" data-ext="${esc(a.url)}">${esc(a.name)}</a></div>`).join('')}</div>` : ''}
+      <div class="sec"><h3>对我的影响（笔记）</h3>
+        <textarea class="note" id="note" placeholder="例如：我们公司的门店租赁合同涉及这条，年报前要评估……">${esc(noteOf(it))}</textarea>
+        <div class="hint" id="noteHint">自动保存${cfg.davUser ? '，并同步到坚果云' : ''}</div></div>
+      <div class="btn-row"><button class="btn" data-ext="${esc(it.url)}">查看原文</button>
+        <button class="btn ghost" data-unreadit="${id}">标为未读</button></div>
+      ${it.ai ? `<div class="ai-note">摘要由 AI（${esc(ai.model || '')}）根据原文生成，可能有误，请以原文为准。</div>` : ''}
+    </div>`;
+  $('#sheet').classList.add('open');
+  $('#sheet .body').scrollTop = 0;
+  const ta = $('#note');
+  ta.addEventListener('input', () => {
+    clearTimeout(ta._t);
+    ta._t = setTimeout(() => { st.notes[id] = {text: ta.value, ts: new Date().toISOString()}; saveState(); $('#noteHint').textContent = '已保存'; }, 600);
+  });
+}
+function closeDetail(){
+  const ta = $('#note');
+  if(ta && ui.openId && ta.value !== noteOf(byId(ui.openId))){ st.notes[ui.openId] = {text: ta.value, ts: new Date().toISOString()}; saveState(); }
+  $('#sheet').classList.remove('open'); ui.openId = null; render();
+}
+
+/* ================= 事件 ================= */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-fw],[data-type],[data-unread],[data-open],[data-close],[data-star],[data-ext],[data-unreadit],#refreshBtn,#saveDav,#saveBase,#markAll');
+  if(!t) return;
+  const d = t.dataset;
+  if(d.tab){ ui.tab = d.tab; render(); $('#main').scrollTop = 0; }
+  else if(d.fw){ ui.fw = d.fw; render(); $('#main').scrollTop = 0; }
+  else if(d.type){ ui.type = d.type; render(); $('#main').scrollTop = 0; }
+  else if(d.unread){ ui.unread = !ui.unread; render(); }
+  else if(d.open){ openDetail(d.open); }
+  else if(d.close){ closeDetail(); }
+  else if(d.star){ const id = d.star; st.star[id] = {on: !isStar(byId(id)), ts: new Date().toISOString()}; saveState();
+    t.textContent = isStar(byId(id)) ? '★' : '☆'; t.style.color = isStar(byId(id)) ? '#f59e0b' : 'var(--ink)'; toast(isStar(byId(id)) ? '已收藏' : '已取消收藏'); }
+  else if(d.ext){ e.preventDefault(); openUrl(d.ext); }
+  else if(d.unreadit){ delete st.read[d.unreadit]; saveState(); closeDetail(); toast('已标为未读'); }
+  else if(t.id === 'refreshBtn'){ loadData(true); if(cfg.davUser) syncNow(false); }
+  else if(t.id === 'saveDav'){ cfg.davUser = $('#davUser').value.trim(); cfg.davPass = $('#davPass').value.trim(); cfg.davFile = $('#davFile').value.trim() || DEFAULT_DAV_FILE; saveCfg(); syncNow(true); }
+  else if(t.id === 'saveBase'){ cfg.dataBase = $('#dataBase').value.trim() || DEFAULT_DATA_BASE; saveCfg(); dataVer = null; loadData(true); }
+  else if(t.id === 'markAll'){ const now = new Date().toISOString(); items().forEach(it => { if(!st.read[it.id]) st.read[it.id] = now; }); saveState(); render(); toast('已全部标为已读'); }
+});
+document.addEventListener('change', e => { if(e.target.id === 'hideLow'){ cfg.hideLow = e.target.checked; saveCfg(); render(); } });
+let qTimer;
+$('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { ui.q = e.target.value.trim(); render(); }, 200); });
+
+// 安卓返回键
+window.handleBack = () => {
+  if(ui.openId){ closeDetail(); return true; }
+  if(ui.tab !== 'feed'){ ui.tab = 'feed'; render(); return true; }
+  return false;
+};
+// 回到前台时，超过 30 分钟没刷新就自动刷新
+let lastLoad = Date.now();
+window.onAppResume = () => { if(Date.now() - lastLoad > 30 * 60e3){ lastLoad = Date.now(); loadData(false); if(cfg.davUser) syncNow(false); } };
+
+/* ================= 启动 ================= */
+render();
+loadData(false).then(() => { if(cfg.davUser) syncNow(false); });
+</script>
+</body>
+</html>

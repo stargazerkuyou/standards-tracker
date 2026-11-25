@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+def vc = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
+android {
+    namespace 'com.zevarl.zhunze'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.zevarl.zhunze'
+        minSdk 24
+        targetSdk 34
+        versionCode vc
+        versionName "1.0.${vc}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('release.keystore')
+            storePassword System.getenv('KEYSTORE_PASSWORD') ?: ''
+            keyAlias 'zhunze'
+            keyPassword System.getenv('KEYSTORE_PASSWORD') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

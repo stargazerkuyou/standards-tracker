@@ -1,0 +1,53 @@
+# 每天自动抓取准则动态，生成 AI 摘要，更新 data/data.json
+name: 抓取准则动态
+
+on:
+  schedule:
+    - cron: "17 23 * * *"     # 每天 UTC 23:17 = 北京时间早上 7:17
+  workflow_dispatch:           # 也可以在 Actions 页面手动点 "Run workflow"
+    inputs:
+      max_ai:
+        description: "本次最多生成多少条 AI 摘要"
+        default: "80"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+
+      - run: pip install -r scraper/requirements.txt
+
+      - name: 抓取 + AI 摘要
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          MAX_AI: ${{ github.event.inputs.max_ai || '80' }}
+        run: python scraper/fetch.py
+
+      - name: 有变化就提交
+        if: always()
+        run: |
+          git config user.name "准则追踪机器人"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "没有新内容"
+          else
+            git commit -m "数据更新 $(date -u +%Y-%m-%d)"
+            git push
+          fi

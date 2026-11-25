@@ -1,0 +1,137 @@
+"""离线测试：用仿真网页跑通解析器和主流程（不联网、不调 AI）。
+运行：python tests/test_offline.py
+"""
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scraper"))
+
+import common  # noqa: E402
+from sources import mof, ifrs  # noqa: E402
+import summarize  # noqa: E402
+import fetch  # noqa: E402
+
+MOF_LIST = """<html><body><div class="nav"><a href="/">首页</a><span>2017年11月21日</span></div>
+<ul class="liBox">
+<li><a href="./202611/t20261105_4004148.htm" title="关于印发《会计改革与发展“十五五”规划》的通知">关于印发《会计改革与发展“十五五”规划》的通知</a><span>2026-11-11</span></li>
+<li><a href="./202609/t20260910_4001234.htm" title="关于征求《企业会计准则解释第22号(征求意见稿)》意见的函">关于征求《企业会计准则解释第22号(征求意见稿)》意见的函</a><span>2026-09-15</span></li>
+<li><a href="./202610/t20261001_4000001.htm">财政部会计司党支部开展主题教育活动</a><span>2026-10-01</span></li>
+</ul>
+<div class="page"><a href="index_1.htm">下一页</a></div></body></html>"""
+
+MOF_ARTICLE = """<html><body><div class="TRS_Editor"><p>各省、自治区、直辖市财政厅（局）：</p>
+<p>为进一步规范有关业务的会计处理，我们起草了《企业会计准则解释第22号(征求意见稿)》。请于2026年10月11日前将意见反馈至财政部会计司。涉及《企业会计准则第21号——租赁》。</p></div>
+<a href="./P020260910123.pdf">附件1.企业会计准则解释第22号(征求意见稿).pdf</a></body></html>"""
+
+IFRS_SITEMAP = """<?xml version="1.0"?><urlset>
+<url><loc>https://www.ifrs.org/news-and-events/news/2019/05/old-story/</loc></url>
+<url><loc>https://www.ifrs.org/news-and-events/news/{ym}/pir-ifrs-16-concludes-identifies-targeted-improvements/</loc></url>
+<url><loc>https://www.ifrs.org/news-and-events/news/{ym}/meet-new-iasb-chair-sam-woods/</loc></url>
+<url><loc>https://www.ifrs.org/projects/work-plan/</loc></url>
+</urlset>"""
+
+IFRS_ARTICLE = """<html><head><meta property="og:title" content="Post-implementation Review concludes IFRS 16 is working as intended but identifies areas for targeted improvements | IFRS Foundation">
+<meta name="keywords" content="Post-implementation Review of IFRS 16 Leases, Press release, IFRS 16 Leases, International Accounting Standards Board, Media"></head>
+<body><header>menu</header><main><h1>Post-implementation Review concludes IFRS 16 ...</h1><p>23 November 2026</p>
+<p>The IASB has completed its Post-implementation Review of IFRS 16 Leases and concluded the Standard is working as intended.</p>
+<p>We use cookies on ifrs.org to ensure the best user experience possible for everyone.</p></main></body></html>"""
+
+IFRS_ARTICLE2 = """<html><head><meta property="og:title" content="Meet the new IASB Chair, Sam Woods"><meta name="keywords" content="News, International Accounting Standards Board"></head>
+<body><main><p>20 November 2026</p><p>Sam Woods talks about his priorities for the International Accounting Standards Board.</p></main></body></html>"""
+
+
+def fake_get_factory():
+    from datetime import date
+    ym = f"{date.today().year}/{date.today().month:02d}"
+
+    def fake_get(url, timeout=30, retries=3):
+        if url.endswith("sitemap.xml"):
+            return IFRS_SITEMAP.format(ym=ym)
+        if "ifrs.org" in url:
+            return IFRS_ARTICLE if "pir-ifrs-16" in url else IFRS_ARTICLE2
+        if url.rstrip("/").endswith(("zhengcefabu", "gongzuotongzhi")):
+            return MOF_LIST
+        if url.endswith("/"):
+            return "<html><body>空栏目</body></html>"
+        return MOF_ARTICLE
+    return fake_get
+
+
+def check(cond, msg):
+    print(("  ✓ " if cond else "  ✗ ") + msg)
+    if not cond:
+        check.failed = True
+
+
+check.failed = False
+
+
+def test_parsers():
+    print("解析器")
+    items = mof.parse_list(MOF_LIST, "http://kjs.mof.gov.cn/zhengcefabu/", "政策发布")
+    check(len(items) == 2, f"财政部列表解析出 2 条（跳过党建），实际 {len(items)}")
+    check(items[0]["date"] == "2026-11-11", f"用列表显示日期而不是链接日期：{items[0]['date']}")
+    check(items[0]["url"] == "http://kjs.mof.gov.cn/zhengcefabu/202611/t20261105_4004148.htm", "相对链接补全")
+    check(items[1]["type"] == "征求意见", f"征求意见函分类：{items[1]['type']}")
+    check("CAS 解释22" in items[1]["standards"], f"识别解释编号：{items[1]['standards']}")
+    text, att = mof.parse_article(MOF_ARTICLE, "http://kjs.mof.gov.cn/zhengcefabu/202609/t.htm")
+    check("2026年10月11日" in text and len(att) == 1, "正文和附件")
+    art = ifrs.parse_article(IFRS_ARTICLE, "https://www.ifrs.org/news-and-events/news/2026/11/x/")
+    check(art["title"].startswith("Post-implementation Review concludes") and "|" not in art["title"], "IFRS 标题去后缀")
+    check(art["date"] == "2026-11-23", f"IFRS 日期：{art['date']}")
+    check("cookie" not in art["text"].lower(), "过滤 cookie 提示")
+    it = ifrs.build_item("https://www.ifrs.org/news-and-events/news/2026/11/x/", art)
+    check(it["framework"] == "IFRS" and "IFRS 16" in it["standards"], f"IFRS 体系与准则：{it['framework']} {it['standards']}")
+    check(common.parse_date("November 5, 2026") == "2026-11-05", "英文日期格式 2")
+    check(common.guess_framework("ISSB consults on proposals for nature-related disclosures", "IFRS") == "可持续", "ISSB 归入可持续")
+    ai = summarize.parse_json('好的：{"title_zh":"x","summary":"y","type":"乱写","importance":"很高","changes":["a",1],"standards":[{"cas":"CAS 21 租赁","ifrs":"IFRS 16 租赁"}]}')
+    check(ai["type"] is None and ai["importance"] == "中" and ai["changes"] == ["a"], "AI 输出清洗")
+
+
+def test_main():
+    print("主流程")
+    fake = fake_get_factory()
+    common.get = mof.get = ifrs.get = fake
+    calls = []
+
+    def fake_summarize(item, text):
+        calls.append(item["id"])
+        return {"title_zh": "测试", "summary": "摘要", "changes": [], "effective_date": None,
+                "comment_deadline": "2026-10-11" if "征求" in item["title"] else None,
+                "affects": None, "standards": [{"cas": "CAS 21 租赁", "ifrs": "IFRS 16 租赁"}],
+                "type": None, "importance": "高", "importance_reason": "", "model": "fake"}
+    summarize.summarize = fake_summarize
+    os.environ["ANTHROPIC_API_KEY"] = "test"
+
+    with tempfile.TemporaryDirectory() as d:
+        fetch.DATA = Path(d) / "data.json"
+        fetch.META = Path(d) / "meta.json"
+        fetch.main()
+        db = json.loads(fetch.DATA.read_text("utf-8"))
+        n1 = len(db["items"])
+        check(n1 == 6, f"首次运行 6 条（财政部两个栏目各 2 + IFRS 2），实际 {n1}")
+        check(len(calls) == 6, "每条都生成了摘要")
+        check(all(it["ai"] for it in db["items"]), "摘要已写入")
+        check("CAS 21" in db["items"][0]["standards"], "AI 给出的准则编号并入 standards")
+        check(db["sources"]["mof"]["ok"] and db["sources"]["ifrs"]["ok"], "来源状态正常")
+        meta = json.loads(fetch.META.read_text("utf-8"))
+        check(meta["count"] == 6 and len(meta["version"]) == 12, "meta.json")
+        calls.clear()
+        fetch.main()
+        db2 = json.loads(fetch.DATA.read_text("utf-8"))
+        check(len(db2["items"]) == 6 and not calls, "第二次运行不重复添加、不重复调用 AI")
+        meta2 = json.loads(fetch.META.read_text("utf-8"))
+        check(meta2["version"] == meta["version"], "数据没变时 version 不变（App 就不用重新下载）")
+        # 输出一份样例数据给 App 测试用
+        (ROOT / "tests" / "sample-data.json").write_text(fetch.DATA.read_text("utf-8"), "utf-8")
+
+
+if __name__ == "__main__":
+    test_parsers()
+    test_main()
+    print("\n全部通过" if not check.failed else "\n有失败项")
+    sys.exit(1 if check.failed else 0)
