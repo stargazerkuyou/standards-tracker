@@ -25,6 +25,7 @@ import java.util.Iterator;
  * 网页通过 window.Native 调用：
  *   Native.http(id, method, url, headersJson, body)  —— 绕过浏览器跨域限制（坚果云 WebDAV 需要）
  *   Native.openUrl(url)                              —— 用系统浏览器打开原文
+ *   Native.openPdf(url, name) / download(url, name) / openWith(url, name) —— 附件阅读、下载、其他应用打开
  * 结果通过 window.__nativeCb(id, status, text) 回传。
  */
 public class MainActivity extends Activity {
@@ -84,6 +85,25 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openUrl(String url) {
             runOnUiThread(() -> openExternal(url));
+        }
+
+        /** App 内阅读 PDF */
+        @JavascriptInterface
+        public void openPdf(String url, String name) {
+            runOnUiThread(() -> startActivity(new Intent(MainActivity.this, PdfActivity.class)
+                    .putExtra("url", url).putExtra("name", name)));
+        }
+
+        /** 下载到「下载/准则追踪」 */
+        @JavascriptInterface
+        public void download(String url, String name) {
+            runOnUiThread(() -> Downloader.enqueue(MainActivity.this, url, name, false));
+        }
+
+        /** 下载后用其他应用（WPS、PDF 阅读器）打开 */
+        @JavascriptInterface
+        public void openWith(String url, String name) {
+            runOnUiThread(() -> Downloader.enqueue(MainActivity.this, url, name, true));
         }
 
         @JavascriptInterface

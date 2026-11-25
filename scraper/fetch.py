@@ -21,6 +21,7 @@ from sources import mof, ifrs, csrc  # noqa: E402
 import summarize  # noqa: E402
 import auto  # noqa: E402
 import relevance  # noqa: E402
+import attach  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "data.json"
@@ -80,8 +81,20 @@ def main():
     def do_auto(it, text):
         try:
             old = it.get("auto") or {}
-            new = auto.build(it, text, keep_title=old.get("title_zh"))
-            new["v"] = 5
+            att_text, att_name = "", None
+            if it["source"] in ("mof", "csrc") and it.get("attachments"):
+                att_text, att_name = attach.read(it["attachments"])
+            # 正文太短（多半只有一段“现印发给你们”），就把附件内容也拿来生成摘要
+            body = text if len(text or "") >= 400 or not att_text else (text or "") + "\n" + att_text
+            new = auto.build(it, body, keep_title=old.get("title_zh"))
+            if att_text:
+                new["changes"] = attach.headings(att_text)
+                new["from_attachment"] = att_name
+                if not new.get("comment_deadline") and not new.get("effective_date"):
+                    d = auto.extract_dates(att_text)
+                    if it.get("type") in ("准则发布", "解释"):
+                        new["effective_date"] = d["effective_date"]
+            new["v"] = 6
             it["auto"] = new
         except Exception as e:  # noqa: BLE001
             print("  自动摘要失败", it["url"], e)
@@ -189,7 +202,7 @@ def main():
         print(f"修正了 {fixed} 条 IFRS 日期")
 
     # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
-    AUTO_VER = 5   # 规则改了就加 1，已有条目会重新提取一次
+    AUTO_VER = 6   # 规则改了就加 1，已有条目会重新提取一次
     need = [x for x in items.values() if x["id"] not in texts and (
         "auto" not in x or (x["source"] != "ifrs" and (x.get("auto") or {}).get("v", 1) < AUTO_VER)
         or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh"))

@@ -143,6 +143,8 @@ def test_main():
     fake = fake_get_factory()
     common.get = mof.get = ifrs.get = fake
     csrc.fetch_list = lambda: ([], [], ["测试: 列表 0 条，相关 0 条"])
+    import attach
+    attach.read = lambda atts: ("企业会计准则解释第22号\n一、关于售后租回交易的列报\n二、关于数据资源的收入确认", "1.解释.pdf")
     calls = []
 
     def fake_summarize(item, text):
@@ -169,6 +171,7 @@ def test_main():
         ifrs_it = [x for x in db["items"] if x["source"] == "ifrs"][0]
         check(ifrs_it["auto"]["title_zh"].startswith("【译】"), "IFRS 有中文标题")
         mof_it = [x for x in db["items"] if "征求" in x["title"]][0]
+        check(mof_it["auto"].get("changes") == ["一、关于售后租回交易的列报", "二、关于数据资源的收入确认"], f"附件标题作要点：{mof_it['auto'].get('changes')}")
         check(mof_it["auto"]["comment_deadline"] == "2026-10-11", f"财政部截止日：{mof_it['auto']}")
         meta = json.loads(fetch.META.read_text("utf-8"))
         check(meta["count"] == 5 and len(meta["version"]) == 12, "meta.json")
