@@ -97,12 +97,15 @@ def main():
                 new["from_attachment"] = att_name
             elif att_text:
                 new["changes"] = attach.headings(att_text)
+                # 正文只有“参见附件”一类的话：摘要直接取附件开头
+                if len(re.sub(r"\s", "", text or "")) < 200 or "参见附件" in (text or ""):
+                    new["summary"] = auto.mof_summary(att_text) or new.get("summary")
                 new["from_attachment"] = att_name
                 if not new.get("comment_deadline") and not new.get("effective_date"):
                     d = auto.extract_dates(att_text)
                     if it.get("type") in ("准则发布", "解释"):
                         new["effective_date"] = d["effective_date"]
-            new["v"] = 11
+            new["v"] = 12
             it["auto"] = new
         except Exception as e:  # noqa: BLE001
             print("  自动摘要失败", it["url"], e)
@@ -238,7 +241,7 @@ def main():
         print(f"修正了 {fixed} 条 IFRS 日期")
 
     # ---------- 补做自动中文信息（以前抓的、或上次翻译失败的） ----------
-    AUTO_VER = 11   # 规则改了就加 1，已有条目会重新提取一次
+    AUTO_VER = 12   # 规则改了就加 1，已有条目会重新提取一次
     need = [x for x in items.values() if x["id"] not in texts and (
         "auto" not in x or (x["source"] != "ifrs" and (x.get("auto") or {}).get("v", 1) < AUTO_VER)
         or (x["source"] == "ifrs" and not (x.get("auto") or {}).get("title_zh"))
